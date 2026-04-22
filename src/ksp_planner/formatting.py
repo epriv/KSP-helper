@@ -168,10 +168,18 @@ def body_detail_panel(body: dict, parent: dict | None) -> Panel:
 
 
 def dv_trip_panel(trip, from_slug: str, to_slug: str) -> Panel:
-    """Render a `TripPlan` as a per-leg table + raw and margin-padded totals.
+    """Render a `TripPlan` as a per-leg table + raw, aerobrake, and margin totals.
 
     When the trip has intermediate stops, a `stop: <action> (<slug>)` row is
     inserted between legs for each intermediate stop.
+
+    The `aero` column is tri-state:
+        - "✓ −80%"  : edge is can_aerobrake=True and trip.aerobrake is True
+        - "✓ off"   : edge is can_aerobrake=True but trip.aerobrake is False
+        - ""        : edge cannot be aerobraked
+
+    The totals block renders an extra "With aerobrake" row when trip.aerobrake
+    is True, even if the savings are zero (keeps output shape predictable).
     """
     intermediate_stops = trip.stops[1:-1]
 
@@ -188,6 +196,11 @@ def dv_trip_panel(trip, from_slug: str, to_slug: str) -> Panel:
     legs_table.add_column("Δv", justify="right")
     legs_table.add_column("aero", justify="center")
 
+    def _aero_cell(edge) -> str:
+        if not edge.can_aerobrake:
+            return ""
+        return "✓ −80%" if trip.aerobrake else "✓ off"
+
     for leg_idx, leg in enumerate(trip.legs):
         for edge in leg:
             legs_table.add_row(
@@ -195,7 +208,7 @@ def dv_trip_panel(trip, from_slug: str, to_slug: str) -> Panel:
                 "→",
                 edge.to_slug,
                 f"{edge.dv_m_s:>7,.0f} m/s",
-                "✓" if edge.can_aerobrake else "",
+                _aero_cell(edge),
             )
         # Emit stop annotation after each leg except the last
         if leg_idx < len(intermediate_stops):
@@ -212,9 +225,18 @@ def dv_trip_panel(trip, from_slug: str, to_slug: str) -> Panel:
     totals.add_column(style="dim")
     totals.add_column(justify="right")
     totals.add_row("Raw total", f"[bold]{trip.total_raw:,.0f} m/s[/]")
+    if trip.aerobrake:
+        savings = trip.total_raw - trip.total_aerobraked
+        totals.add_row(
+            "With aerobrake",
+            f"[bold]{trip.total_aerobraked:,.0f} m/s[/]  [dim](−{savings:,.0f})[/]",
+        )
+        planned = trip.total_aerobraked_planned
+    else:
+        planned = trip.total_planned
     totals.add_row(
         f"Planned (+{trip.margin_pct:g}% margin)",
-        f"[bold green]{trip.total_planned:,.0f} m/s[/]",
+        f"[bold green]{planned:,.0f} m/s[/]",
     )
 
     # Title includes the via chain in body(action) form when present

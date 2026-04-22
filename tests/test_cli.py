@@ -470,3 +470,25 @@ def test_dv_via_annotation_shows_action_in_output(seed_db):
     # Annotation row — "stop: orbit" appears with the resolved slug
     assert "stop: orbit" in r.stdout
     assert "minmus_low_orbit" in r.stdout
+
+
+# ---------- 7c: aerobrake rendering ----------
+
+
+def test_dv_kerbin_to_duna_shows_with_aerobrake_row(seed_db):
+    """Default (aerobrake on): panel shows 'With aerobrake' totals row."""
+    r = _invoke(seed_db, "dv", "kerbin_surface", "duna_surface")
+    assert r.exit_code == 0, r.stdout
+    assert "Raw total" in r.stdout
+    assert "With aerobrake" in r.stdout
+    # raw 6,270; aerobraked 4,822; planned aerobraked 5,063
+    assert "6,270" in r.stdout
+    assert "4,822" in r.stdout
+
+
+def test_dv_aerobrake_column_marks_credited_edges(seed_db):
+    """The aero column shows '−80%' on can_aerobrake=True edges when aerobrake is on."""
+    r = _invoke(seed_db, "dv", "kerbin_surface", "duna_surface")
+    assert r.exit_code == 0, r.stdout
+    # Duna descent and duna_capture→duna_low_orbit are both creditable
+    assert "−80%" in r.stdout or "-80%" in r.stdout  # accept either hyphen shape
