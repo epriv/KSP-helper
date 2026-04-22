@@ -98,12 +98,14 @@ Each sub-phase ships on its own, gated by its acceptance test.
 
 **Done when:** `ksp dv kerbin_surface mun_surface` outputs the right total within ±50 m/s of the chart.
 
-### 7b — Intermediate stops
+### 7b — Intermediate stops ✅ *(shipped 2026-04-21)*
 
-- CLI: `ksp dv <from> <to> --via <slug> --action orbit|land|flyby` (repeatable)
+- CLI: `ksp dv <from> <to> --via body[:action]` (repeatable; action ∈ `land`/`orbit`/`flyby`, default `orbit`)
 - `plan_trip` handles a list of stops, not just two
+- `resolve_stop(graph, body, action)` maps body+action → node slug via `ACTION_SUFFIXES` (`land → _surface`, `orbit → _low_orbit`, `flyby → _transfer`)
+- **`flyby` resolves to `_transfer`, not `_capture`** — revised from this doc's original §Intermediate stops mapping, which was self-contradictory (`_capture` is the state *after* the capture burn). See [docs/superpowers/specs/2026-04-21-dv-planner-7b-design.md](../superpowers/specs/2026-04-21-dv-planner-7b-design.md) for the shipped spec.
 
-**Done when:** `kerbin_surface → minmus (orbit) → mun_surface` totals correctly.
+**Done when:** `kerbin_surface → minmus (orbit) → mun_surface` totals correctly. Shipped value: **7,330 m/s raw / 7,696 @ 5% margin** (the "≈ 6,400 m/s" example earlier in this doc was eyeballed and didn't account for the LKO bounce — the actual walk pays the Minmus round-trip detour).
 
 ### 7c — Return trip + aerobraking
 
