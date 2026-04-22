@@ -331,3 +331,63 @@ def test_plan_run_dv_budget_with_thrust_shows_burn_time(writable_db):
     r = _invoke(writable_db, "plan", "run", "stage-1")
     assert r.exit_code == 0
     assert "Burn time" in r.stdout
+
+
+# ---------- Phase 7a: ksp dv ----------
+
+def test_dv_kerbin_to_mun_acceptance(seed_db):
+    """Acceptance: ksp dv kerbin_surface mun_surface within ±50 m/s of chart total."""
+    r = _invoke(seed_db, "dv", "kerbin_surface", "mun_surface")
+    assert r.exit_code == 0
+    assert "kerbin_surface" in r.stdout
+    assert "mun_surface" in r.stdout
+    # raw total = 5150; planned = 5408 at default 5%
+    assert "5,150" in r.stdout
+    assert "5,408" in r.stdout  # 5150 * 1.05 = 5407.5 → "5,408" rounded
+
+
+def test_dv_default_margin_is_5pct(seed_db):
+    r = _invoke(seed_db, "dv", "kerbin_surface", "mun_surface")
+    assert r.exit_code == 0
+    assert "5%" in r.stdout or "5.0%" in r.stdout
+
+
+def test_dv_custom_margin(seed_db):
+    r = _invoke(seed_db, "dv", "kerbin_surface", "mun_surface", "--margin", "10")
+    assert r.exit_code == 0
+    # planned = 5150 * 1.10 = 5665
+    assert "5,665" in r.stdout
+    assert "10" in r.stdout  # margin label
+
+
+def test_dv_zero_margin_shows_raw_only(seed_db):
+    r = _invoke(seed_db, "dv", "kerbin_surface", "mun_surface", "--margin", "0")
+    assert r.exit_code == 0
+    assert "5,150" in r.stdout
+
+
+def test_dv_unknown_from_slug_errors(seed_db):
+    r = _invoke(seed_db, "dv", "nibiru_surface", "mun_surface")
+    assert r.exit_code == 1
+    assert "nibiru_surface" in r.stdout
+
+
+def test_dv_unknown_to_slug_errors(seed_db):
+    r = _invoke(seed_db, "dv", "kerbin_surface", "nibiru_surface")
+    assert r.exit_code == 1
+    assert "nibiru_surface" in r.stdout
+
+
+def test_dv_lists_each_leg(seed_db):
+    """Output should show every edge along the path so the user can audit it."""
+    r = _invoke(seed_db, "dv", "kerbin_surface", "mun_surface")
+    assert r.exit_code == 0
+    # 4 legs: kerbin_surface → kerbin_low_orbit → mun_transfer → mun_low_orbit → mun_surface
+    assert "kerbin_low_orbit" in r.stdout
+    assert "mun_transfer" in r.stdout
+    assert "mun_low_orbit" in r.stdout
+    # individual leg costs
+    assert "3,400" in r.stdout
+    assert "860" in r.stdout
+    assert "310" in r.stdout
+    assert "580" in r.stdout

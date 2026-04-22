@@ -50,5 +50,26 @@ CREATE TABLE IF NOT EXISTS plans (
     updated_at   TEXT    NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_bodies_parent ON bodies(parent_id);
-CREATE INDEX IF NOT EXISTS idx_orbits_body   ON orbits(body_id);
+CREATE TABLE IF NOT EXISTS dv_nodes (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    body_id      INTEGER REFERENCES bodies(id),
+    state        TEXT    NOT NULL CHECK (state IN ('surface', 'low_orbit', 'capture', 'transfer', 'sun_orbit')),
+    slug         TEXT    NOT NULL UNIQUE,
+    parent_slug  TEXT    REFERENCES dv_nodes(slug)
+);
+
+CREATE TABLE IF NOT EXISTS dv_edges (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    from_slug     TEXT    NOT NULL REFERENCES dv_nodes(slug),
+    to_slug       TEXT    NOT NULL REFERENCES dv_nodes(slug),
+    dv_m_s        REAL    NOT NULL,
+    can_aerobrake INTEGER NOT NULL DEFAULT 0,
+    notes         TEXT,
+    UNIQUE (from_slug, to_slug)
+);
+
+CREATE INDEX IF NOT EXISTS idx_bodies_parent  ON bodies(parent_id);
+CREATE INDEX IF NOT EXISTS idx_orbits_body    ON orbits(body_id);
+CREATE INDEX IF NOT EXISTS idx_dv_nodes_parent ON dv_nodes(parent_slug);
+CREATE INDEX IF NOT EXISTS idx_dv_edges_from  ON dv_edges(from_slug);
+CREATE INDEX IF NOT EXISTS idx_dv_edges_to    ON dv_edges(to_slug);

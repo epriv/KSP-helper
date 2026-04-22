@@ -165,6 +165,40 @@ def body_detail_panel(body: dict, parent: dict | None) -> Panel:
     return Panel(Group(*renderables), title=f"[bold]{body['name']}[/]", box=box.ROUNDED)
 
 
+def dv_trip_panel(trip, from_slug: str, to_slug: str) -> Panel:
+    """Render a `TripPlan` as a per-leg table + raw and margin-padded totals."""
+    legs_table = Table(box=box.SIMPLE_HEAVY, show_header=True, header_style="dim")
+    legs_table.add_column("From")
+    legs_table.add_column("→")
+    legs_table.add_column("To")
+    legs_table.add_column("Δv", justify="right")
+    legs_table.add_column("aero", justify="center")
+    for leg in trip.legs:
+        for edge in leg:
+            legs_table.add_row(
+                edge.from_slug,
+                "→",
+                edge.to_slug,
+                f"{edge.dv_m_s:>7,.0f} m/s",
+                "✓" if edge.can_aerobrake else "",
+            )
+
+    totals = Table.grid(padding=(0, 2))
+    totals.add_column(style="dim")
+    totals.add_column(justify="right")
+    totals.add_row("Raw total", f"[bold]{trip.total_raw:,.0f} m/s[/]")
+    totals.add_row(
+        f"Planned (+{trip.margin_pct:g}% margin)",
+        f"[bold green]{trip.total_planned:,.0f} m/s[/]",
+    )
+
+    return Panel(
+        Group(legs_table, Text(""), totals),
+        title=f"[bold]Δv trip — {from_slug} → {to_slug}[/]",
+        box=box.ROUNDED,
+    )
+
+
 def comm_report_panel(r: dict) -> Panel:
     status_color = "green" if r["coverage_ok"] else "red"
     status_glyph = "✓ COVERAGE OK" if r["coverage_ok"] else "✗ COVERAGE FAILS"

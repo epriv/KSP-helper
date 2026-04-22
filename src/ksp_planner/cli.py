@@ -11,12 +11,14 @@ from rich.console import Console
 from ksp_planner import db as dblib
 from ksp_planner import plans as plans_mod
 from ksp_planner.comms import comm_network_report
+from ksp_planner.dv_map import Stop, plan_trip
 from ksp_planner.formatting import (
     antennas_table,
     bodies_table,
     body_detail_panel,
     comm_report_panel,
     dsn_table,
+    dv_trip_panel,
     fmt_time,
     plan_detail_panel,
     plans_table,
@@ -291,6 +293,27 @@ def dv_budget(
         _require_db(db)
         plans_mod.save(db, save, "dv_budget", cfg)
         console.print(f"[green]✓ saved as plan '{save}'[/]")
+
+
+@app.command()
+def dv(
+    from_slug: Annotated[str, typer.Argument(help="Departure node slug, e.g. kerbin_surface")],
+    to_slug: Annotated[str, typer.Argument(help="Arrival node slug, e.g. mun_surface")],
+    margin: Annotated[
+        float,
+        typer.Option("--margin", "-m", help="Margin percentage on the raw total"),
+    ] = 5.0,
+    db: DbOption = Path("ksp.db"),
+):
+    """Walk the canonical Δv chart from one node to another and total the cost."""
+    conn = _open(db)
+    graph = dblib.load_dv_graph(conn)
+    try:
+        trip = plan_trip(graph, [Stop(from_slug.lower()), Stop(to_slug.lower())], margin_pct=margin)
+    except KeyError as e:
+        console.print(f"[red]{e}[/]")
+        raise typer.Exit(1) from None
+    console.print(dv_trip_panel(trip, from_slug.lower(), to_slug.lower()))
 
 
 plan_app = typer.Typer(help="Manage saved mission plans.", no_args_is_help=True)

@@ -45,6 +45,197 @@ DSN_LEVELS: list[tuple[int, float]] = [
     (3, 2.5e11),
 ]
 
+# Δv chart — community Δv map values, normalised to a tree.
+#
+# Source: KSP community Δv map (Cuky's "Kerbin System Δv" subway-style chart),
+# https://wiki.kerbalspaceprogram.com/wiki/Cheat_sheet#Delta-V_map
+#
+# Convention (chosen so Kerbin-departure totals match the chart):
+#   - Kerbin trunk (kerbol_orbit ↔ kerbin_transfer ↔ kerbin_capture ↔ kerbin_LO): all 0.
+#     The Kerbin SOI is the de-facto reference frame for the chart; LKO is the
+#     baseline parking orbit for every "LKO → X" interplanetary number.
+#   - For each planet other than Kerbin:
+#       (kerbol_orbit ↔ planet_transfer)        : 0 (semantic)
+#       (planet_transfer ↔ planet_capture)      : chart "LKO → planet" ejection
+#       (planet_capture ↔ planet_low_orbit)     : chart capture burn at planet
+#       (planet_low_orbit ↔ planet_surface)     : chart ascent/descent
+#   - Mun & Minmus skip the capture node (per the design doc tree art); their
+#     `<moon>_transfer ↔ <moon>_low_orbit` edge carries the capture burn.
+#   - Edges are seeded as adjacencies (parent, child, down_dv, up_dv, aerobrake_on_descent).
+#     Two directed `dv_edges` rows are inserted per adjacency.
+#
+# `body_slug` ties a node to a `bodies.slug` row (NULL for abstract nodes like
+# kerbol_orbit). `state` is one of the schema CHECK values.
+
+# (slug, body_slug, state, parent_slug)
+DV_NODES: list[tuple[str, str | None, str, str | None]] = [
+    ("kerbol_orbit",     None,     "sun_orbit", None),
+
+    # Moho
+    ("moho_transfer",    "moho",   "transfer",  "kerbol_orbit"),
+    ("moho_capture",     "moho",   "capture",   "moho_transfer"),
+    ("moho_low_orbit",   "moho",   "low_orbit", "moho_capture"),
+    ("moho_surface",     "moho",   "surface",   "moho_low_orbit"),
+
+    # Eve + Gilly
+    ("eve_transfer",     "eve",    "transfer",  "kerbol_orbit"),
+    ("eve_capture",      "eve",    "capture",   "eve_transfer"),
+    ("eve_low_orbit",    "eve",    "low_orbit", "eve_capture"),
+    ("eve_surface",      "eve",    "surface",   "eve_low_orbit"),
+    ("gilly_transfer",   "gilly",  "transfer",  "eve_low_orbit"),
+    ("gilly_capture",    "gilly",  "capture",   "gilly_transfer"),
+    ("gilly_low_orbit",  "gilly",  "low_orbit", "gilly_capture"),
+    ("gilly_surface",    "gilly",  "surface",   "gilly_low_orbit"),
+
+    # Kerbin trunk (zero-cost; kerbol_orbit ↔ kerbin_LO is semantic only)
+    ("kerbin_transfer",  "kerbin", "transfer",  "kerbol_orbit"),
+    ("kerbin_capture",   "kerbin", "capture",   "kerbin_transfer"),
+    ("kerbin_low_orbit", "kerbin", "low_orbit", "kerbin_capture"),
+    ("kerbin_surface",   "kerbin", "surface",   "kerbin_low_orbit"),
+
+    # Mun & Minmus (no capture node; per design doc tree art)
+    ("mun_transfer",     "mun",    "transfer",  "kerbin_low_orbit"),
+    ("mun_low_orbit",    "mun",    "low_orbit", "mun_transfer"),
+    ("mun_surface",      "mun",    "surface",   "mun_low_orbit"),
+    ("minmus_transfer",  "minmus", "transfer",  "kerbin_low_orbit"),
+    ("minmus_low_orbit", "minmus", "low_orbit", "minmus_transfer"),
+    ("minmus_surface",   "minmus", "surface",   "minmus_low_orbit"),
+
+    # Duna + Ike
+    ("duna_transfer",    "duna",   "transfer",  "kerbol_orbit"),
+    ("duna_capture",     "duna",   "capture",   "duna_transfer"),
+    ("duna_low_orbit",   "duna",   "low_orbit", "duna_capture"),
+    ("duna_surface",     "duna",   "surface",   "duna_low_orbit"),
+    ("ike_transfer",     "ike",    "transfer",  "duna_low_orbit"),
+    ("ike_capture",      "ike",    "capture",   "ike_transfer"),
+    ("ike_low_orbit",    "ike",    "low_orbit", "ike_capture"),
+    ("ike_surface",      "ike",    "surface",   "ike_low_orbit"),
+
+    # Dres
+    ("dres_transfer",    "dres",   "transfer",  "kerbol_orbit"),
+    ("dres_capture",     "dres",   "capture",   "dres_transfer"),
+    ("dres_low_orbit",   "dres",   "low_orbit", "dres_capture"),
+    ("dres_surface",     "dres",   "surface",   "dres_low_orbit"),
+
+    # Jool + 5 moons (no jool_surface — gas giant)
+    ("jool_transfer",    "jool",   "transfer",  "kerbol_orbit"),
+    ("jool_capture",     "jool",   "capture",   "jool_transfer"),
+    ("jool_low_orbit",   "jool",   "low_orbit", "jool_capture"),
+    ("laythe_transfer",  "laythe", "transfer",  "jool_low_orbit"),
+    ("laythe_capture",   "laythe", "capture",   "laythe_transfer"),
+    ("laythe_low_orbit", "laythe", "low_orbit", "laythe_capture"),
+    ("laythe_surface",   "laythe", "surface",   "laythe_low_orbit"),
+    ("vall_transfer",    "vall",   "transfer",  "jool_low_orbit"),
+    ("vall_capture",     "vall",   "capture",   "vall_transfer"),
+    ("vall_low_orbit",   "vall",   "low_orbit", "vall_capture"),
+    ("vall_surface",     "vall",   "surface",   "vall_low_orbit"),
+    ("tylo_transfer",    "tylo",   "transfer",  "jool_low_orbit"),
+    ("tylo_capture",     "tylo",   "capture",   "tylo_transfer"),
+    ("tylo_low_orbit",   "tylo",   "low_orbit", "tylo_capture"),
+    ("tylo_surface",     "tylo",   "surface",   "tylo_low_orbit"),
+    ("bop_transfer",     "bop",    "transfer",  "jool_low_orbit"),
+    ("bop_capture",      "bop",    "capture",   "bop_transfer"),
+    ("bop_low_orbit",    "bop",    "low_orbit", "bop_capture"),
+    ("bop_surface",      "bop",    "surface",   "bop_low_orbit"),
+    ("pol_transfer",     "pol",    "transfer",  "jool_low_orbit"),
+    ("pol_capture",      "pol",    "capture",   "pol_transfer"),
+    ("pol_low_orbit",    "pol",    "low_orbit", "pol_capture"),
+    ("pol_surface",      "pol",    "surface",   "pol_low_orbit"),
+
+    # Eeloo
+    ("eeloo_transfer",   "eeloo",  "transfer",  "kerbol_orbit"),
+    ("eeloo_capture",    "eeloo",  "capture",   "eeloo_transfer"),
+    ("eeloo_low_orbit",  "eeloo",  "low_orbit", "eeloo_capture"),
+    ("eeloo_surface",    "eeloo",  "surface",   "eeloo_low_orbit"),
+]
+
+# (parent_slug, child_slug, down_dv_m_s, up_dv_m_s, aerobrake_on_descent)
+# Two directed `dv_edges` rows are seeded per row (parent→child = down, child→parent = up).
+# `aerobrake_on_descent` only annotates the parent→child direction.
+DV_ADJACENCIES: list[tuple[str, str, float, float, bool]] = [
+    # Kerbin trunk — all zero (LKO is the chart's baseline parking orbit)
+    ("kerbol_orbit",     "kerbin_transfer",  0,    0,    False),
+    ("kerbin_transfer",  "kerbin_capture",   0,    0,    False),
+    ("kerbin_capture",   "kerbin_low_orbit", 0,    0,    True),   # aerobrake re-entry
+    ("kerbin_low_orbit", "kerbin_surface",   3400, 3400, True),   # asc 3400, desc 0 w/ aero
+
+    # Mun (no capture node — capture burn folded into transfer→LO edge)
+    ("kerbin_low_orbit", "mun_transfer",     860,  860,  False),
+    ("mun_transfer",     "mun_low_orbit",    310,  310,  False),
+    ("mun_low_orbit",    "mun_surface",      580,  580,  False),
+
+    # Minmus
+    ("kerbin_low_orbit", "minmus_transfer",  930,  930,  False),
+    ("minmus_transfer",  "minmus_low_orbit", 160,  160,  False),
+    ("minmus_low_orbit", "minmus_surface",   180,  180,  False),
+
+    # Moho
+    ("kerbol_orbit",     "moho_transfer",    0,    0,    False),
+    ("moho_transfer",    "moho_capture",     2520, 2520, False),
+    ("moho_capture",     "moho_low_orbit",   2410, 2410, False),
+    ("moho_low_orbit",   "moho_surface",     870,  870,  False),
+
+    # Eve
+    ("kerbol_orbit",     "eve_transfer",     0,    0,    False),
+    ("eve_transfer",     "eve_capture",      1080, 1080, False),
+    ("eve_capture",      "eve_low_orbit",    80,   80,   True),   # Eve aerobrake nearly free
+    ("eve_low_orbit",    "eve_surface",      8000, 8000, True),   # brutal asc, aerobrake desc
+    # Gilly (under Eve LO; no capture cost effectively)
+    ("eve_low_orbit",    "gilly_transfer",   60,   60,   False),
+    ("gilly_transfer",   "gilly_capture",    0,    0,    False),
+    ("gilly_capture",    "gilly_low_orbit",  410,  410,  False),
+    ("gilly_low_orbit",  "gilly_surface",    30,   30,   False),
+
+    # Duna
+    ("kerbol_orbit",     "duna_transfer",    0,    0,    False),
+    ("duna_transfer",    "duna_capture",     1060, 1060, False),
+    ("duna_capture",     "duna_low_orbit",   360,  360,  True),   # Duna aerobrake helps capture
+    ("duna_low_orbit",   "duna_surface",     1450, 1450, True),   # Duna descent aerobrake → ~250
+    # Ike
+    ("duna_low_orbit",   "ike_transfer",     30,   30,   False),
+    ("ike_transfer",     "ike_capture",      0,    0,    False),
+    ("ike_capture",      "ike_low_orbit",    180,  180,  False),
+    ("ike_low_orbit",    "ike_surface",      390,  390,  False),
+
+    # Dres
+    ("kerbol_orbit",     "dres_transfer",    0,    0,    False),
+    ("dres_transfer",    "dres_capture",     1140, 1140, False),
+    ("dres_capture",     "dres_low_orbit",   1290, 1290, False),
+    ("dres_low_orbit",   "dres_surface",     430,  430,  False),
+
+    # Jool (no surface)
+    ("kerbol_orbit",     "jool_transfer",    0,    0,    False),
+    ("jool_transfer",    "jool_capture",     1980, 1980, True),   # Jool aerocapture possible
+    ("jool_capture",     "jool_low_orbit",   2810, 2810, True),
+    # Jool moons branch off jool_low_orbit
+    ("jool_low_orbit",   "laythe_transfer",  240,  240,  False),
+    ("laythe_transfer",  "laythe_capture",   0,    0,    False),
+    ("laythe_capture",   "laythe_low_orbit", 1070, 1070, True),   # Laythe atmosphere
+    ("laythe_low_orbit", "laythe_surface",   2900, 2900, True),
+    ("jool_low_orbit",   "vall_transfer",    620,  620,  False),
+    ("vall_transfer",    "vall_capture",     0,    0,    False),
+    ("vall_capture",     "vall_low_orbit",   910,  910,  False),
+    ("vall_low_orbit",   "vall_surface",     860,  860,  False),
+    ("jool_low_orbit",   "tylo_transfer",    400,  400,  False),
+    ("tylo_transfer",    "tylo_capture",     0,    0,    False),
+    ("tylo_capture",     "tylo_low_orbit",   1100, 1100, False),
+    ("tylo_low_orbit",   "tylo_surface",     2270, 2270, False),
+    ("jool_low_orbit",   "bop_transfer",     220,  220,  False),
+    ("bop_transfer",     "bop_capture",      0,    0,    False),
+    ("bop_capture",      "bop_low_orbit",    900,  900,  False),
+    ("bop_low_orbit",    "bop_surface",      220,  220,  False),
+    ("jool_low_orbit",   "pol_transfer",     160,  160,  False),
+    ("pol_transfer",     "pol_capture",      0,    0,    False),
+    ("pol_capture",      "pol_low_orbit",    820,  820,  False),
+    ("pol_low_orbit",    "pol_surface",      130,  130,  False),
+
+    # Eeloo
+    ("kerbol_orbit",     "eeloo_transfer",   0,    0,    False),
+    ("eeloo_transfer",   "eeloo_capture",    1370, 1370, False),
+    ("eeloo_capture",    "eeloo_low_orbit",  1330, 1330, False),
+    ("eeloo_low_orbit",  "eeloo_surface",    620,  620,  False),
+]
+
 
 def km_to_m(km: float | str) -> float:
     return float(km) * 1000.0
@@ -155,6 +346,28 @@ def seed(db_path: Path) -> None:
             cur.execute(
                 "INSERT INTO dsn_levels (level, range_m) VALUES (?, ?)",
                 (level, range_m),
+            )
+
+        # Δv chart: nodes first (parent_slug FK self-references; insert in tree order).
+        body_id_by_slug = {
+            slug: body_id for slug, body_id in cur.execute("SELECT slug, id FROM bodies")
+        }
+        for slug, body_slug, state, parent_slug in DV_NODES:
+            body_id = body_id_by_slug[body_slug] if body_slug else None
+            cur.execute(
+                "INSERT INTO dv_nodes (slug, body_id, state, parent_slug) VALUES (?, ?, ?, ?)",
+                (slug, body_id, state, parent_slug),
+            )
+        for parent, child, down_dv, up_dv, aerobrake in DV_ADJACENCIES:
+            cur.execute(
+                "INSERT INTO dv_edges (from_slug, to_slug, dv_m_s, can_aerobrake) "
+                "VALUES (?, ?, ?, ?)",
+                (parent, child, float(down_dv), int(aerobrake)),
+            )
+            cur.execute(
+                "INSERT INTO dv_edges (from_slug, to_slug, dv_m_s, can_aerobrake) "
+                "VALUES (?, ?, ?, ?)",
+                (child, parent, float(up_dv), 0),
             )
 
         conn.commit()

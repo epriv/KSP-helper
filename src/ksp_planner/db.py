@@ -63,3 +63,32 @@ def get_dsn(conn: sqlite3.Connection, level: int) -> dict:
     if row is None:
         raise KeyError(f"No DSN level {level!r}")
     return dict(row)
+
+
+def load_dv_graph(conn: sqlite3.Connection):
+    """Load all `dv_nodes` + `dv_edges` into a `DvGraph`."""
+    from ksp_planner.dv_map import DvGraph, DvNode, Edge
+
+    nodes = [
+        DvNode(
+            slug=r["slug"],
+            parent_slug=r["parent_slug"],
+            body_slug=r["body_slug"],
+            state=r["state"],
+        )
+        for r in conn.execute(
+            """SELECT n.slug, n.parent_slug, n.state, b.slug AS body_slug
+                 FROM dv_nodes n
+            LEFT JOIN bodies b ON b.id = n.body_id"""
+        )
+    ]
+    edges = [
+        Edge(
+            from_slug=r["from_slug"],
+            to_slug=r["to_slug"],
+            dv_m_s=r["dv_m_s"],
+            can_aerobrake=bool(r["can_aerobrake"]),
+        )
+        for r in conn.execute("SELECT from_slug, to_slug, dv_m_s, can_aerobrake FROM dv_edges")
+    ]
+    return DvGraph(nodes=nodes, edges=edges)
