@@ -391,3 +391,73 @@ def test_dv_lists_each_leg(seed_db):
     assert "860" in r.stdout
     assert "310" in r.stdout
     assert "580" in r.stdout
+
+
+# ---------- 7b: --via + actions ----------
+
+
+def test_dv_via_orbit_totals_match_chart(seed_db):
+    """Acceptance: kerbin_surface → minmus(orbit) → mun_surface ≈ 7,330 m/s raw."""
+    r = _invoke(seed_db, "dv", "kerbin_surface", "mun_surface", "--via", "minmus:orbit")
+    assert r.exit_code == 0, r.stdout
+    # Rich panel prints the raw total with thousands separator
+    assert "7,330 m/s" in r.stdout
+
+
+def test_dv_via_default_action_is_orbit(seed_db):
+    """--via minmus (no :action) should behave like --via minmus:orbit."""
+    r_default = _invoke(seed_db, "dv", "kerbin_surface", "mun_surface", "--via", "minmus")
+    r_explicit = _invoke(seed_db, "dv", "kerbin_surface", "mun_surface", "--via", "minmus:orbit")
+    assert r_default.exit_code == 0
+    assert r_explicit.exit_code == 0
+    # Both should print the same raw total
+    assert "7,330 m/s" in r_default.stdout
+    assert "7,330 m/s" in r_explicit.stdout
+
+
+def test_dv_via_land_routes_through_surface(seed_db):
+    r = _invoke(seed_db, "dv", "kerbin_surface", "mun_surface", "--via", "minmus:land")
+    assert r.exit_code == 0, r.stdout
+    # Landing on Minmus means the intermediate stop is minmus_surface
+    assert "minmus_surface" in r.stdout
+
+
+def test_dv_via_flyby_routes_through_transfer(seed_db):
+    r = _invoke(seed_db, "dv", "kerbin_surface", "mun_surface", "--via", "minmus:flyby")
+    assert r.exit_code == 0, r.stdout
+    # Flyby resolves to minmus_transfer
+    assert "minmus_transfer" in r.stdout
+
+
+def test_dv_multiple_via_preserves_order(seed_db):
+    """--via mun:flyby --via minmus:land: mun_transfer appears before minmus_surface."""
+    r = _invoke(seed_db, "dv", "kerbin_surface", "kerbin_surface",
+                "--via", "mun:flyby", "--via", "minmus:land")
+    assert r.exit_code == 0, r.stdout
+    # Both intermediate slugs should appear; mun before minmus in the printed legs
+    out = r.stdout
+    assert out.index("mun_transfer") < out.index("minmus_surface")
+
+
+def test_dv_via_unknown_action_errors(seed_db):
+    r = _invoke(seed_db, "dv", "kerbin_surface", "mun_surface", "--via", "minmus:fly")
+    assert r.exit_code == 1
+    assert "unknown action" in r.stdout
+
+
+def test_dv_via_unknown_body_errors(seed_db):
+    r = _invoke(seed_db, "dv", "kerbin_surface", "mun_surface", "--via", "gorgon:orbit")
+    assert r.exit_code == 1
+    # surfaces as KeyError from graph.node() on gorgon_low_orbit
+    assert "gorgon_low_orbit" in r.stdout
+
+
+def test_dv_via_malformed_syntax_errors(seed_db):
+    """--via a:b:c is invalid (too many colons), as is --via :orbit (empty body)."""
+    r_extra = _invoke(seed_db, "dv", "kerbin_surface", "mun_surface", "--via", "a:b:c")
+    assert r_extra.exit_code == 1
+    assert "expected body[:action]" in r_extra.stdout
+
+    r_empty = _invoke(seed_db, "dv", "kerbin_surface", "mun_surface", "--via", ":orbit")
+    assert r_empty.exit_code == 1
+    assert "expected body[:action]" in r_empty.stdout

@@ -11,7 +11,7 @@ from rich.console import Console
 from ksp_planner import db as dblib
 from ksp_planner import plans as plans_mod
 from ksp_planner.comms import comm_network_report
-from ksp_planner.dv_map import Stop, plan_trip
+from ksp_planner.dv_map import Stop, plan_trip, resolve_stop
 from ksp_planner.formatting import (
     antennas_table,
     bodies_table,
@@ -295,10 +295,31 @@ def dv_budget(
         console.print(f"[green]✓ saved as plan '{save}'[/]")
 
 
+def _parse_via(raw: str) -> tuple[str, str]:
+    """Parse a --via value of the form 'body' or 'body:action'. Returns (body, action)."""
+    parts = raw.split(":")
+    if len(parts) == 1:
+        body, action = parts[0], "orbit"
+    elif len(parts) == 2:
+        body, action = parts
+    else:
+        raise ValueError(f"expected body[:action], got {raw!r}")
+    if not body:
+        raise ValueError(f"expected body[:action], got {raw!r}")
+    return body, action
+
+
 @app.command()
 def dv(
     from_slug: Annotated[str, typer.Argument(help="Departure node slug, e.g. kerbin_surface")],
     to_slug: Annotated[str, typer.Argument(help="Arrival node slug, e.g. mun_surface")],
+    via: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--via",
+            help="Intermediate stop as body[:action]. Repeatable. action ∈ land|orbit|flyby, default orbit.",  # noqa: E501
+        ),
+    ] = None,
     margin: Annotated[
         float,
         typer.Option("--margin", "-m", help="Margin percentage on the raw total"),
@@ -308,8 +329,19 @@ def dv(
     """Walk the canonical Δv chart from one node to another and total the cost."""
     conn = _open(db)
     graph = dblib.load_dv_graph(conn)
+
+    stops: list[Stop] = [Stop(from_slug.lower())]
+    for raw in via or []:
+        try:
+            body, action = _parse_via(raw)
+            stops.append(resolve_stop(graph, body.lower(), action.lower()))
+        except (ValueError, KeyError) as e:
+            console.print(f"[red]{e}[/]")
+            raise typer.Exit(1) from None
+    stops.append(Stop(to_slug.lower()))
+
     try:
-        trip = plan_trip(graph, [Stop(from_slug.lower()), Stop(to_slug.lower())], margin_pct=margin)
+        trip = plan_trip(graph, stops, margin_pct=margin)
     except KeyError as e:
         console.print(f"[red]{e}[/]")
         raise typer.Exit(1) from None
