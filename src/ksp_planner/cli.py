@@ -324,6 +324,13 @@ def dv(
         float,
         typer.Option("--margin", "-m", help="Margin percentage on the raw total"),
     ] = 5.0,
+    aerobrake: Annotated[
+        bool,
+        typer.Option(
+            "--aerobrake/--no-aerobrake",
+            help="Credit can_aerobrake=True descent edges at 80% savings. Default on.",
+        ),
+    ] = True,
     db: DbOption = Path("ksp.db"),
 ):
     """Walk the canonical Δv chart from one node to another and total the cost."""
@@ -341,7 +348,7 @@ def dv(
     stops.append(Stop(to_slug.lower()))
 
     try:
-        trip = plan_trip(graph, stops, margin_pct=margin)
+        trip = plan_trip(graph, stops, margin_pct=margin, aerobrake=aerobrake)
     except KeyError as e:
         console.print(f"[red]{e}[/]")
         raise typer.Exit(1) from None

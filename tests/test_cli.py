@@ -492,3 +492,21 @@ def test_dv_aerobrake_column_marks_credited_edges(seed_db):
     assert r.exit_code == 0, r.stdout
     # Duna descent and duna_capture→duna_low_orbit are both creditable
     assert "−80%" in r.stdout or "-80%" in r.stdout  # accept either hyphen shape
+
+
+def test_dv_no_aerobrake_hides_with_aerobrake_row(seed_db):
+    """--no-aerobrake: only Raw total + Planned, no 'With aerobrake' row."""
+    r = _invoke(seed_db, "dv", "kerbin_surface", "duna_surface", "--no-aerobrake")
+    assert r.exit_code == 0, r.stdout
+    assert "Raw total" in r.stdout
+    assert "With aerobrake" not in r.stdout
+    # raw still 6,270
+    assert "6,270" in r.stdout
+
+
+def test_dv_no_aerobrake_aero_column_shows_off(seed_db):
+    """--no-aerobrake: aero column on creditable edges shows '✓ off' not '−80%'."""
+    r = _invoke(seed_db, "dv", "kerbin_surface", "duna_surface", "--no-aerobrake")
+    assert r.exit_code == 0, r.stdout
+    assert "off" in r.stdout
+    assert "−80%" not in r.stdout and "-80%" not in r.stdout
