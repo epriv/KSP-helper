@@ -8,6 +8,8 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
+from ksp_planner.dv_map import ACTION_SUFFIXES
+
 
 def fmt_dist(m: float | None) -> str:
     if m is None:
@@ -171,14 +173,20 @@ def dv_trip_panel(trip, from_slug: str, to_slug: str) -> Panel:
     When the trip has intermediate stops, a `stop: <action> (<slug>)` row is
     inserted between legs for each intermediate stop.
     """
+    intermediate_stops = trip.stops[1:-1]
+
+    # Ensure the From column is wide enough to show the annotation on one line
+    annotation_width = max(
+        (len(f"— stop: {s.action} ({s.slug}) —") for s in intermediate_stops),
+        default=0,
+    )
+
     legs_table = Table(box=box.SIMPLE_HEAVY, show_header=True, header_style="dim")
-    legs_table.add_column("From")
+    legs_table.add_column("From", min_width=annotation_width if annotation_width else None)
     legs_table.add_column("→")
     legs_table.add_column("To")
     legs_table.add_column("Δv", justify="right")
     legs_table.add_column("aero", justify="center")
-
-    intermediate_stops = trip.stops[1:-1]
 
     for leg_idx, leg in enumerate(trip.legs):
         for edge in leg:
@@ -193,9 +201,9 @@ def dv_trip_panel(trip, from_slug: str, to_slug: str) -> Panel:
         if leg_idx < len(intermediate_stops):
             stop = intermediate_stops[leg_idx]
             legs_table.add_row(
+                f"[dim italic]— stop: {stop.action} ({stop.slug}) —[/]",
                 "",
                 "",
-                f"[dim italic]stop: {stop.action} ({stop.slug})[/]",
                 "",
                 "",
             )
@@ -209,9 +217,12 @@ def dv_trip_panel(trip, from_slug: str, to_slug: str) -> Panel:
         f"[bold green]{trip.total_planned:,.0f} m/s[/]",
     )
 
-    # Title includes the via chain when present
+    # Title includes the via chain in body(action) form when present
     if intermediate_stops:
-        via_chain = " → ".join(s.slug for s in intermediate_stops)
+        via_chain = " → ".join(
+            f"{s.slug.removesuffix(ACTION_SUFFIXES[s.action])}({s.action})"
+            for s in intermediate_stops
+        )
         title = f"[bold]Δv trip — {from_slug} → {via_chain} → {to_slug}[/]"
     else:
         title = f"[bold]Δv trip — {from_slug} → {to_slug}[/]"
