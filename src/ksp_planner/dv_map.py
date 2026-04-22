@@ -38,8 +38,11 @@ class TripPlan:
     stops: list[Stop]
     legs: list[list[Edge]]
     total_raw: float
+    total_aerobraked: float
+    aerobrake: bool
     margin_pct: float
     total_planned: float
+    total_aerobraked_planned: float
 
 
 ACTION_SUFFIXES = {
@@ -47,6 +50,10 @@ ACTION_SUFFIXES = {
     "orbit": "_low_orbit",
     "flyby": "_transfer",
 }
+
+# 20% residual = aerobrake credits 80% of a can_aerobrake edge's ballistic dv.
+# Residual covers correction burns, safety margin, and imperfect atmospheric passes.
+AEROBRAKE_RESIDUAL_PCT = 20.0
 
 
 class DvGraph:
@@ -121,17 +128,33 @@ def plan_trip(
     graph: DvGraph,
     stops: list[Stop],
     margin_pct: float = 5.0,
+    aerobrake: bool = True,
 ) -> TripPlan:
     if len(stops) < 2:
         raise ValueError("trip requires at least two stops")
     legs = [path_dv(graph, a.slug, b.slug) for a, b in pairwise(stops)]
     raw = sum(e.dv_m_s for leg in legs for e in leg)
+
+    residual_factor = AEROBRAKE_RESIDUAL_PCT / 100
+    if aerobrake:
+        aerobraked = sum(
+            e.dv_m_s * residual_factor if e.can_aerobrake else e.dv_m_s
+            for leg in legs
+            for e in leg
+        )
+    else:
+        aerobraked = raw
+
+    margin_factor = 1 + margin_pct / 100
     return TripPlan(
         stops=stops,
         legs=legs,
         total_raw=raw,
+        total_aerobraked=aerobraked,
+        aerobrake=aerobrake,
         margin_pct=margin_pct,
-        total_planned=raw * (1 + margin_pct / 100),
+        total_planned=raw * margin_factor,
+        total_aerobraked_planned=aerobraked * margin_factor,
     )
 
 

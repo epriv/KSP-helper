@@ -150,6 +150,79 @@ def test_plan_trip_requires_two_stops(tree):
         plan_trip(tree, [Stop("c")])
 
 
+# ---------- 7c: aerobrake credit ----------
+
+
+@pytest.fixture
+def aero_tree() -> DvGraph:
+    """Minimal tree where one descent edge (a→d) is flagged can_aerobrake=True.
+
+           root
+            |
+            a
+          (a↔d: up=2, down=1000, aerobrake_on_descent)
+            |
+            d
+    """
+    nodes = [
+        DvNode(slug="root", parent_slug=None, body_slug=None, state="sun_orbit"),
+        DvNode(slug="a",    parent_slug="root", body_slug=None, state="transfer"),
+        DvNode(slug="d",    parent_slug="a",    body_slug=None, state="low_orbit"),
+    ]
+    edges = [
+        # parent→child=down has can_aerobrake=True; child→parent=up has False
+        Edge(from_slug="root", to_slug="a", dv_m_s=100, can_aerobrake=False),
+        Edge(from_slug="a", to_slug="root", dv_m_s=10,  can_aerobrake=False),
+        Edge(from_slug="a", to_slug="d",    dv_m_s=1000, can_aerobrake=True),
+        Edge(from_slug="d", to_slug="a",    dv_m_s=2,    can_aerobrake=False),
+    ]
+    return DvGraph(nodes=nodes, edges=edges)
+
+
+def test_plan_trip_aerobrake_credits_capable_edge(aero_tree):
+    """1000 m/s descent with can_aerobrake=True → credited to 200 at 20% residual."""
+    plan = plan_trip(aero_tree, [Stop("a"), Stop("d")])
+    # raw = 1000 (single descent edge)
+    assert plan.total_raw == 1000
+    # aerobraked = 1000 * 0.20 = 200
+    assert plan.total_aerobraked == pytest.approx(200.0)
+    assert plan.aerobrake is True
+
+
+def test_plan_trip_aerobrake_false_is_noop(aero_tree):
+    """aerobrake=False: total_aerobraked == total_raw (no credit applied)."""
+    plan = plan_trip(aero_tree, [Stop("a"), Stop("d")], aerobrake=False)
+    assert plan.total_raw == 1000
+    assert plan.total_aerobraked == 1000
+    assert plan.aerobrake is False
+
+
+def test_plan_trip_mixed_edges_only_discounts_flagged(tree):
+    """The existing `tree` fixture has can_aerobrake=False on every edge — no credit."""
+    plan = plan_trip(tree, [Stop("c"), Stop("f")])  # raw 27 via c→a→d→f
+    assert plan.total_raw == 27
+    assert plan.total_aerobraked == 27  # no flagged edges in the tree fixture
+
+
+def test_plan_trip_aerobrake_planned_applies_margin(aero_tree):
+    """total_aerobraked_planned == total_aerobraked * (1 + margin/100)."""
+    plan = plan_trip(aero_tree, [Stop("a"), Stop("d")])  # default 5%
+    assert plan.total_aerobraked == pytest.approx(200.0)
+    assert plan.total_aerobraked_planned == pytest.approx(200.0 * 1.05)
+
+
+def test_plan_trip_aerobrake_planned_scales_with_custom_margin(aero_tree):
+    plan = plan_trip(aero_tree, [Stop("a"), Stop("d")], margin_pct=10.0)
+    assert plan.total_aerobraked_planned == pytest.approx(200.0 * 1.10)
+
+
+def test_plan_trip_aerobrake_residual_constant_is_20():
+    """Sanity-pin the module constant so a future edit is caught by CI."""
+    from ksp_planner.dv_map import AEROBRAKE_RESIDUAL_PCT
+
+    assert AEROBRAKE_RESIDUAL_PCT == 20.0
+
+
 # ---------- seed integration: load_dv_graph + chart smoke ----------
 
 def test_load_dv_graph_round_trip(db):
@@ -323,3 +396,43 @@ def test_kerbin_via_minmus_orbit_to_mun_surface_acceptance(db):
     assert len(plan.legs) == 2
     assert plan.stops[1].slug == "minmus_low_orbit"
     assert plan.stops[1].action == "orbit"
+
+
+# ---------- 7c: integration — real-seed aerobrake ----------
+
+
+def test_kerbin_to_duna_surface_aerobraked_totals(db):
+    """kerbin→duna: raw 6,270 (unchanged); aerobraked ≈ 4,822 (duna capture 360→72, duna descent 1450→290)."""
+    from ksp_planner.db import load_dv_graph
+
+    g = load_dv_graph(db)
+    plan = plan_trip(g, [Stop("kerbin_surface"), Stop("duna_surface")])
+    assert plan.total_raw == pytest.approx(6270, abs=5)
+    assert plan.total_aerobraked == pytest.approx(4822, abs=5)
+    assert plan.total_aerobraked_planned == pytest.approx(4822 * 1.05, abs=10)
+    assert plan.aerobrake is True
+
+
+def test_kerbin_to_mun_surface_aerobrake_is_noop(db):
+    """kerbin→mun: path has no can_aerobrake=True edges, so aerobraked == raw."""
+    from ksp_planner.db import load_dv_graph
+
+    g = load_dv_graph(db)
+    plan = plan_trip(g, [Stop("kerbin_surface"), Stop("mun_surface")])
+    assert plan.total_raw == pytest.approx(5150, abs=5)
+    assert plan.total_aerobraked == plan.total_raw
+
+
+def test_kerbin_to_eve_surface_aerobraked_shows_dramatic_savings(db):
+    """Eve descent (8000 ballistic) credited at 80% → ~1,600 + small double-credit quirk on capture."""
+    from ksp_planner.db import load_dv_graph
+
+    g = load_dv_graph(db)
+    plan = plan_trip(g, [Stop("kerbin_surface"), Stop("eve_surface")])
+    # Outbound: 3400 + 0 + 0 + 0 + 0 + 1080 + 80 + 8000 = 12,560
+    # With aerobrake: 3400 + 0 + 0 + 0 + 0 + 1080 + 16 + 1600 = 6,096
+    # (the eve_capture→eve_low_orbit 80 is already chart-baked; double-credit → 16 residual, accepted per spec)
+    assert plan.total_raw == pytest.approx(12560, abs=10)
+    assert plan.total_aerobraked == pytest.approx(6096, abs=10)
+    # savings should be large (> 6000 m/s)
+    assert plan.total_raw - plan.total_aerobraked > 6000
