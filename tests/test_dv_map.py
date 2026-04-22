@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import pytest
 
-from ksp_planner.dv_map import DvGraph, DvNode, Edge, Stop, path_dv, plan_trip
+from ksp_planner.dv_map import DvGraph, DvNode, Edge, Stop, path_dv, plan_trip, resolve_stop
 
 
 @pytest.fixture
@@ -248,43 +248,31 @@ def body_tree() -> DvGraph:
 
 
 def test_resolve_stop_land(body_tree):
-    from ksp_planner.dv_map import resolve_stop
-
     stop = resolve_stop(body_tree, "minmus", "land")
     assert stop == Stop(slug="minmus_surface", action="land")
 
 
 def test_resolve_stop_orbit(body_tree):
-    from ksp_planner.dv_map import resolve_stop
-
     stop = resolve_stop(body_tree, "minmus", "orbit")
     assert stop == Stop(slug="minmus_low_orbit", action="orbit")
 
 
 def test_resolve_stop_flyby(body_tree):
-    from ksp_planner.dv_map import resolve_stop
-
     stop = resolve_stop(body_tree, "minmus", "flyby")
     assert stop == Stop(slug="minmus_transfer", action="flyby")
 
 
 def test_resolve_stop_unknown_action_raises(body_tree):
-    from ksp_planner.dv_map import resolve_stop
-
     with pytest.raises(KeyError, match="unknown action"):
         resolve_stop(body_tree, "minmus", "fly")
 
 
 def test_resolve_stop_body_missing_state_raises(body_tree):
     """Kerbol has only kerbol_orbit — actions needing kerbol_surface/_low_orbit/_transfer error."""
-    from ksp_planner.dv_map import resolve_stop
-
     with pytest.raises(KeyError, match="kerbol_surface"):
         resolve_stop(body_tree, "kerbol", "land")
 
 
 def test_resolve_stop_unknown_body_raises(body_tree):
-    from ksp_planner.dv_map import resolve_stop
-
     with pytest.raises(KeyError, match="gorgon"):
         resolve_stop(body_tree, "gorgon", "orbit")
