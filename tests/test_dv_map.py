@@ -280,3 +280,46 @@ def test_resolve_stop_body_missing_state_raises(body_tree):
 def test_resolve_stop_unknown_body_raises(body_tree):
     with pytest.raises(KeyError, match="gorgon"):
         resolve_stop(body_tree, "gorgon", "orbit")
+
+
+# ---------- 7b: integration — resolver against real seed ----------
+
+
+@pytest.mark.parametrize(
+    ("body_slug", "action", "expected_node"),
+    [
+        ("minmus", "land",  "minmus_surface"),
+        ("minmus", "orbit", "minmus_low_orbit"),
+        ("minmus", "flyby", "minmus_transfer"),
+        ("duna",   "land",  "duna_surface"),
+        ("duna",   "orbit", "duna_low_orbit"),
+        ("duna",   "flyby", "duna_transfer"),
+        ("jool",   "orbit", "jool_low_orbit"),
+        ("mun",    "flyby", "mun_transfer"),
+    ],
+)
+def test_resolve_stop_against_real_seed(db, body_slug, action, expected_node):
+    from ksp_planner.db import load_dv_graph
+
+    g = load_dv_graph(db)
+    stop = resolve_stop(g, body_slug, action)
+    assert stop.slug == expected_node
+    assert stop.action == action
+
+
+def test_kerbin_via_minmus_orbit_to_mun_surface_acceptance(db):
+    """7b acceptance gate: totals match the chart walk within ±50 m/s of 7,330."""
+    from ksp_planner.db import load_dv_graph
+
+    g = load_dv_graph(db)
+    stops = [
+        Stop("kerbin_surface"),
+        resolve_stop(g, "minmus", "orbit"),
+        Stop("mun_surface"),
+    ]
+    plan = plan_trip(g, stops, margin_pct=5.0)
+    assert plan.total_raw == pytest.approx(7330, abs=50)
+    assert plan.total_planned == pytest.approx(7330 * 1.05, rel=0.01)
+    assert len(plan.legs) == 2
+    assert plan.stops[1].slug == "minmus_low_orbit"
+    assert plan.stops[1].action == "orbit"
