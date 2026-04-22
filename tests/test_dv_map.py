@@ -402,7 +402,7 @@ def test_kerbin_via_minmus_orbit_to_mun_surface_acceptance(db):
 
 
 def test_kerbin_to_duna_surface_aerobraked_totals(db):
-    """kerbin→duna: raw 6,270 (unchanged); aerobraked ≈ 4,822 (duna capture 360→72, duna descent 1450→290)."""
+    """kerbin→duna: raw 6,270; aerobraked ≈ 4,822 (duna capture 360→72, duna descent 1450→290)."""
     from ksp_planner.db import load_dv_graph
 
     g = load_dv_graph(db)
@@ -424,14 +424,15 @@ def test_kerbin_to_mun_surface_aerobrake_is_noop(db):
 
 
 def test_kerbin_to_eve_surface_aerobraked_shows_dramatic_savings(db):
-    """Eve descent (8000 ballistic) credited at 80% → ~1,600 + small double-credit quirk on capture."""
+    """Eve descent (8000 ballistic) credited at 80% → ~1,600 + small quirk on capture."""
     from ksp_planner.db import load_dv_graph
 
     g = load_dv_graph(db)
     plan = plan_trip(g, [Stop("kerbin_surface"), Stop("eve_surface")])
     # Outbound: 3400 + 0 + 0 + 0 + 0 + 1080 + 80 + 8000 = 12,560
     # With aerobrake: 3400 + 0 + 0 + 0 + 0 + 1080 + 16 + 1600 = 6,096
-    # (the eve_capture→eve_low_orbit 80 is already chart-baked; double-credit → 16 residual, accepted per spec)
+    # (eve_capture→eve_low_orbit 80 is already chart-baked; double-credit → 16 residual,
+    #  accepted per 7c spec.)
     assert plan.total_raw == pytest.approx(12560, abs=10)
     assert plan.total_aerobraked == pytest.approx(6096, abs=10)
     # savings should be large (> 6000 m/s)
