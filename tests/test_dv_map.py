@@ -113,21 +113,25 @@ def test_missing_edge_raises(tree):
 # ---------- plan_trip ----------
 
 def test_plan_trip_two_stops_default_margin(tree):
-    plan = plan_trip(tree, [Stop("c"), Stop("f")])
+    stops_in = [Stop("c"), Stop("f")]
+    plan = plan_trip(tree, stops_in)
     assert plan.total_raw == 27
     assert plan.margin_pct == 5.0
     assert plan.total_planned == pytest.approx(27 * 1.05)
     assert len(plan.legs) == 1
     assert len(plan.legs[0]) == 3
+    assert plan.stops == stops_in
 
 
 def test_plan_trip_three_stops(tree):
     # c -> f -> e
     # leg1: c -> f = 27 (c->a 1, a->d 12, d->f 14)
     # leg2: f -> e (LCA root): f->d 4, d->a 2, a->root 10, root->b 200, b->e 13 = 229
-    plan = plan_trip(tree, [Stop("c"), Stop("f"), Stop("e")])
+    stops_in = [Stop("c"), Stop("f"), Stop("e")]
+    plan = plan_trip(tree, stops_in)
     assert plan.total_raw == 27 + 229
     assert len(plan.legs) == 2
+    assert plan.stops == stops_in
 
 
 def test_plan_trip_custom_margin(tree):

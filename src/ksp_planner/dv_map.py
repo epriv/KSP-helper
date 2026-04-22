@@ -35,6 +35,7 @@ class Stop:
 
 @dataclass(frozen=True)
 class TripPlan:
+    stops: list[Stop]
     legs: list[list[Edge]]
     total_raw: float
     margin_pct: float
@@ -126,6 +127,7 @@ def plan_trip(
     legs = [path_dv(graph, a.slug, b.slug) for a, b in pairwise(stops)]
     raw = sum(e.dv_m_s for leg in legs for e in leg)
     return TripPlan(
+        stops=stops,
         legs=legs,
         total_raw=raw,
         margin_pct=margin_pct,
