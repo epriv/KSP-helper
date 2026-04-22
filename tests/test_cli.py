@@ -461,3 +461,12 @@ def test_dv_via_malformed_syntax_errors(seed_db):
     r_empty = _invoke(seed_db, "dv", "kerbin_surface", "mun_surface", "--via", ":orbit")
     assert r_empty.exit_code == 1
     assert "expected body[:action]" in r_empty.stdout
+
+
+def test_dv_via_annotation_shows_action_in_output(seed_db):
+    """A --via stop should print its action as an annotation between the two legs."""
+    r = _invoke(seed_db, "dv", "kerbin_surface", "mun_surface", "--via", "minmus:orbit")
+    assert r.exit_code == 0, r.stdout
+    # Annotation row — "stop: orbit" appears with the resolved slug
+    assert "stop: orbit" in r.stdout
+    assert "minmus_low_orbit" in r.stdout

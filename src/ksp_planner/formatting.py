@@ -166,14 +166,21 @@ def body_detail_panel(body: dict, parent: dict | None) -> Panel:
 
 
 def dv_trip_panel(trip, from_slug: str, to_slug: str) -> Panel:
-    """Render a `TripPlan` as a per-leg table + raw and margin-padded totals."""
+    """Render a `TripPlan` as a per-leg table + raw and margin-padded totals.
+
+    When the trip has intermediate stops, a `stop: <action> (<slug>)` row is
+    inserted between legs for each intermediate stop.
+    """
     legs_table = Table(box=box.SIMPLE_HEAVY, show_header=True, header_style="dim")
     legs_table.add_column("From")
     legs_table.add_column("→")
     legs_table.add_column("To")
     legs_table.add_column("Δv", justify="right")
     legs_table.add_column("aero", justify="center")
-    for leg in trip.legs:
+
+    intermediate_stops = trip.stops[1:-1]
+
+    for leg_idx, leg in enumerate(trip.legs):
         for edge in leg:
             legs_table.add_row(
                 edge.from_slug,
@@ -181,6 +188,16 @@ def dv_trip_panel(trip, from_slug: str, to_slug: str) -> Panel:
                 edge.to_slug,
                 f"{edge.dv_m_s:>7,.0f} m/s",
                 "✓" if edge.can_aerobrake else "",
+            )
+        # Emit stop annotation after each leg except the last
+        if leg_idx < len(intermediate_stops):
+            stop = intermediate_stops[leg_idx]
+            legs_table.add_row(
+                "",
+                "",
+                f"[dim italic]stop: {stop.action} ({stop.slug})[/]",
+                "",
+                "",
             )
 
     totals = Table.grid(padding=(0, 2))
@@ -192,9 +209,16 @@ def dv_trip_panel(trip, from_slug: str, to_slug: str) -> Panel:
         f"[bold green]{trip.total_planned:,.0f} m/s[/]",
     )
 
+    # Title includes the via chain when present
+    if intermediate_stops:
+        via_chain = " → ".join(s.slug for s in intermediate_stops)
+        title = f"[bold]Δv trip — {from_slug} → {via_chain} → {to_slug}[/]"
+    else:
+        title = f"[bold]Δv trip — {from_slug} → {to_slug}[/]"
+
     return Panel(
         Group(legs_table, Text(""), totals),
-        title=f"[bold]Δv trip — {from_slug} → {to_slug}[/]",
+        title=title,
         box=box.ROUNDED,
     )
 
