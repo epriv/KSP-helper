@@ -41,6 +41,13 @@ class TripPlan:
     total_planned: float
 
 
+ACTION_SUFFIXES = {
+    "land": "_surface",
+    "orbit": "_low_orbit",
+    "flyby": "_transfer",
+}
+
+
 class DvGraph:
     """Bundle of nodes + directed edges. Indexed for O(1) parent and edge lookup."""
 
@@ -124,3 +131,17 @@ def plan_trip(
         margin_pct=margin_pct,
         total_planned=raw * (1 + margin_pct / 100),
     )
+
+
+def resolve_stop(graph: DvGraph, body_slug: str, action: str) -> Stop:
+    """Map (body, action) → Stop with the corresponding tree-node slug.
+
+    Raises KeyError if `action` is not one of {land, orbit, flyby}, or if the
+    body has no node for that state (e.g. kerbol has only kerbol_orbit, so
+    kerbol:land has no corresponding node).
+    """
+    if action not in ACTION_SUFFIXES:
+        raise KeyError(f"unknown action: {action!r} — use land, orbit, or flyby")
+    node_slug = f"{body_slug}{ACTION_SUFFIXES[action]}"
+    graph.node(node_slug)  # surfaces KeyError on unknown body or missing state
+    return Stop(slug=node_slug, action=action)

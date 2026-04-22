@@ -218,3 +218,73 @@ def test_eve_capture_claims_aerobrake_credit(db):
     edge = g.edge("eve_capture", "eve_low_orbit")
     assert edge.can_aerobrake, "Eve insertion needs can_aerobrake=True for the chart value"
     assert edge.dv_m_s < 200, f"chart Eve capture ~80 m/s w/ aerobrake, got {edge.dv_m_s}"
+
+
+# ---------- resolve_stop ----------
+
+
+@pytest.fixture
+def body_tree() -> DvGraph:
+    """Minimal body-style fixture: Minmus (full chain) + Kerbol (only _orbit)."""
+    nodes = [
+        DvNode(slug="kerbol_orbit", parent_slug=None, body_slug="kerbol", state="sun_orbit"),
+        DvNode(
+            slug="minmus_transfer", parent_slug="kerbol_orbit", body_slug="minmus", state="transfer"
+        ),
+        DvNode(
+            slug="minmus_low_orbit",
+            parent_slug="minmus_transfer",
+            body_slug="minmus",
+            state="low_orbit",
+        ),
+        DvNode(
+            slug="minmus_surface",
+            parent_slug="minmus_low_orbit",
+            body_slug="minmus",
+            state="surface",
+        ),
+    ]
+    return DvGraph(nodes=nodes, edges=[])
+
+
+def test_resolve_stop_land(body_tree):
+    from ksp_planner.dv_map import resolve_stop
+
+    stop = resolve_stop(body_tree, "minmus", "land")
+    assert stop == Stop(slug="minmus_surface", action="land")
+
+
+def test_resolve_stop_orbit(body_tree):
+    from ksp_planner.dv_map import resolve_stop
+
+    stop = resolve_stop(body_tree, "minmus", "orbit")
+    assert stop == Stop(slug="minmus_low_orbit", action="orbit")
+
+
+def test_resolve_stop_flyby(body_tree):
+    from ksp_planner.dv_map import resolve_stop
+
+    stop = resolve_stop(body_tree, "minmus", "flyby")
+    assert stop == Stop(slug="minmus_transfer", action="flyby")
+
+
+def test_resolve_stop_unknown_action_raises(body_tree):
+    from ksp_planner.dv_map import resolve_stop
+
+    with pytest.raises(KeyError, match="unknown action"):
+        resolve_stop(body_tree, "minmus", "fly")
+
+
+def test_resolve_stop_body_missing_state_raises(body_tree):
+    """Kerbol has only kerbol_orbit — actions needing kerbol_surface/_low_orbit/_transfer error."""
+    from ksp_planner.dv_map import resolve_stop
+
+    with pytest.raises(KeyError, match="kerbol_surface"):
+        resolve_stop(body_tree, "kerbol", "land")
+
+
+def test_resolve_stop_unknown_body_raises(body_tree):
+    from ksp_planner.dv_map import resolve_stop
+
+    with pytest.raises(KeyError, match="gorgon"):
+        resolve_stop(body_tree, "gorgon", "orbit")
