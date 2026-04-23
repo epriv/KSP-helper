@@ -11,7 +11,7 @@ from rich.console import Console
 from ksp_planner import db as dblib
 from ksp_planner import plans as plans_mod
 from ksp_planner.comms import comm_network_report
-from ksp_planner.dv_map import Stop, plan_trip, resolve_stop
+from ksp_planner.dv_map import Stop, plan_round_trip, plan_trip, resolve_stop
 from ksp_planner.formatting import (
     antennas_table,
     bodies_table,
@@ -328,9 +328,16 @@ def dv(
         bool,
         typer.Option(
             "--aerobrake/--no-aerobrake",
-            help="Credit can_aerobrake=True descent edges at 80% savings. Default on.",
+            help="Credit can_aerobrake=True descent edges. Default on.",
         ),
     ] = True,
+    return_: Annotated[
+        bool,
+        typer.Option(
+            "--return",
+            help="Round-trip: append the reversed itinerary so the trip ends at the start.",
+        ),
+    ] = False,
     db: DbOption = Path("ksp.db"),
 ):
     """Walk the canonical Δv chart from one node to another and total the cost."""
@@ -347,8 +354,9 @@ def dv(
             raise typer.Exit(1) from None
     stops.append(Stop(to_slug.lower()))
 
+    planner = plan_round_trip if return_ else plan_trip
     try:
-        trip = plan_trip(graph, stops, margin_pct=margin, aerobrake=aerobrake)
+        trip = planner(graph, stops, margin_pct=margin, aerobrake=aerobrake)
     except KeyError as e:
         console.print(f"[red]{e}[/]")
         raise typer.Exit(1) from None

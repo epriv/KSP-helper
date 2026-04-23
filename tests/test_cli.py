@@ -510,3 +510,50 @@ def test_dv_no_aerobrake_aero_column_shows_off(seed_db):
     assert r.exit_code == 0, r.stdout
     assert "off" in r.stdout
     assert "−100%" not in r.stdout and "-100%" not in r.stdout
+
+
+# ---------- 7d: --return ----------
+
+
+def test_dv_return_flag_round_trips_kerbin_to_mun(seed_db):
+    """--return doubles the itinerary; aerobrake credits Kerbin return descent."""
+    r = _invoke(seed_db, "dv", "kerbin_surface", "mun_surface", "--return")
+    assert r.exit_code == 0, r.stdout
+    # Round-trip raw = 10,300; aerobraked = 6,900; planned @ 5% = 7,245
+    assert "10,300" in r.stdout
+    assert "6,900" in r.stdout
+    assert "7,245" in r.stdout
+
+
+def test_dv_return_flag_no_aerobrake(seed_db):
+    """--return --no-aerobrake: raw 10,300, planned 10,815, no aerobraked row."""
+    r = _invoke(
+        seed_db, "dv", "kerbin_surface", "mun_surface", "--return", "--no-aerobrake"
+    )
+    assert r.exit_code == 0, r.stdout
+    assert "10,300" in r.stdout
+    assert "10,815" in r.stdout  # 10,300 × 1.05
+    assert "With aerobrake" not in r.stdout
+
+
+def test_dv_return_composes_with_via(seed_db):
+    """--via + --return: [A, B, C] → [A, B, C, B, A] — 4 legs."""
+    r = _invoke(
+        seed_db, "dv", "kerbin_surface", "minmus_surface",
+        "--via", "mun:orbit", "--return",
+    )
+    assert r.exit_code == 0, r.stdout
+    # The Mun intermediate stop should appear as an annotation row
+    assert "stop: orbit" in r.stdout
+    assert "mun_low_orbit" in r.stdout
+    # And the title should advertise the via chain
+    assert "mun(orbit)" in r.stdout
+
+
+def test_dv_without_return_is_one_way(seed_db):
+    """Regression: dropping --return leaves the default one-way behavior intact."""
+    r = _invoke(seed_db, "dv", "kerbin_surface", "mun_surface")
+    assert r.exit_code == 0, r.stdout
+    # one-way raw 5,150 — not the round-trip 10,300
+    assert "5,150" in r.stdout
+    assert "10,300" not in r.stdout

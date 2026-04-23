@@ -184,18 +184,12 @@ def dv_trip_panel(trip, from_slug: str, to_slug: str) -> Panel:
     """
     intermediate_stops = trip.stops[1:-1]
 
-    # Ensure the From column is wide enough to show the annotation on one line
-    annotation_width = max(
-        (len(f"— stop: {s.action} ({s.slug}) —") for s in intermediate_stops),
-        default=0,
-    )
-
     legs_table = Table(box=box.SIMPLE_HEAVY, show_header=True, header_style="dim")
-    legs_table.add_column("From", min_width=annotation_width if annotation_width else None)
+    legs_table.add_column("From")
     legs_table.add_column("→")
     legs_table.add_column("To")
     legs_table.add_column("Δv", justify="right")
-    legs_table.add_column("aero", justify="center")
+    legs_table.add_column("aero", justify="center", no_wrap=True, min_width=7)
 
     credit_pct = 100 - AEROBRAKE_RESIDUAL_PCT
 
@@ -213,11 +207,13 @@ def dv_trip_panel(trip, from_slug: str, to_slug: str) -> Panel:
                 f"{edge.dv_m_s:>7,.0f} m/s",
                 _aero_cell(edge),
             )
-        # Emit stop annotation after each leg except the last
+        # Emit stop annotation after each leg except the last. Slug is already
+        # visible in the adjacent leg rows, so the annotation only carries the
+        # action label — keeps the row short on narrow terminals.
         if leg_idx < len(intermediate_stops):
             stop = intermediate_stops[leg_idx]
             legs_table.add_row(
-                f"[dim italic]— stop: {stop.action} ({stop.slug}) —[/]",
+                f"[dim italic]— stop: {stop.action} —[/]",
                 "",
                 "",
                 "",
