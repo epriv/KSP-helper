@@ -2,8 +2,8 @@
 
 > Resumable status snapshot. Paired with [01-phases.md](01-phases.md) (the plan) and [02-data-sources.md](02-data-sources.md) (the data provenance).
 
-**Last updated:** 2026-04-22
-**Tests:** 192 passing · **Lint:** clean · **Coverage:** 98% overall, 100% on `orbital.py` and `db.py`.
+**Last updated:** 2026-04-23
+**Tests:** 201 passing · **Lint:** clean · **Coverage:** 98% overall, 100% on `orbital.py` and `db.py`.
 
 ---
 
@@ -18,7 +18,7 @@
 | 4 | CLI shell (Typer + Rich) | ✅ done | Subcommands: `body`, `bodies`, `antennas`, `dsn`, `comms`, `hohmann`, `twr`, `dv-budget`, `plan {list,show,run,delete}` |
 | 5 | Hohmann / TWR / Tsiolkovsky | ✅ done | Kerbin→Duna matches canonical 1060 m/s ejection |
 | 6 | Mission plan persistence | ✅ done | All four calculators support `--save NAME`; `ksp plan {list,show,run,delete}` covers round-trip |
-| 7 | Δv planner (tree model, margin, stops) | 🟡 in progress (7a ✅; 7b ✅; 7c ✅; 7d next) | Design locked in [features/dv-planner.md](features/dv-planner.md); sub-phase ladder below |
+| 7 | Δv planner (tree model, margin, stops) | 🟡 in progress (7a ✅; 7b ✅; 7c ✅; 7d ✅; 7e next) | Design locked in [features/dv-planner.md](features/dv-planner.md); sub-phase ladder below |
 | 8 | Web UI + prod1 deploy (FastAPI + systemd + nginx) | ⬜ not started | |
 | 9 | Mod packs / KSP2 seeds | ⬜ not started | |
 
@@ -39,7 +39,7 @@ Design locked in [features/dv-planner.md](features/dv-planner.md). The spec spli
 | 7a | Total Δv, two points: schema + seed + `path_dv` (LCA tree walk) + `plan_trip` (flat 5% margin) + `ksp dv <from> <to>` CLI + Hohmann cross-check | ✅ done | `ksp dv kerbin_surface mun_surface` = 5,150 m/s raw / 5,408 m/s @ 5% margin (chart 5,150 ✅) |
 | 7b | Intermediate stops with per-stop `action` (`land` / `orbit` / `flyby`); `--via body[:action]` repeatable on CLI | ✅ done | `kerbin_surface → minmus (orbit) → mun_surface` = 7,330 m/s raw / 7,696 @ 5% |
 | 7c | Aerobraking credit on one-way trips: `aerobrake` kwarg on `plan_trip`, `--no-aerobrake` CLI flag, tri-state aero column + dual totals. Round-trip `--return` deferred. | ✅ done | `ksp dv kerbin_surface duna_surface` shows raw 6,270 · with aerobrake 4,822 (−1,448 m/s Duna savings) |
-| 7d | Stage-aware budget check: ship as `[(wet_kg, dry_kg, isp_s), …]`; verify Δv coverage; report which leg runs dry. Shares Tsiolkovsky module with Phase 5 | ⬜ not started | Canned Mun lander stage sheet confirms reach-and-return |
+| 7d | *Re-scoped:* round-trip `--return` + aerobrake residual → 0% (community-chart convention). Stage-aware budget check dropped — per-edge output already supports in-game stage planning. | ✅ done | `ksp dv kerbin_surface mun_surface --return` = 10,300 raw / 6,900 aerobraked / 7,245 @ 5% |
 | 7e | Optional graph upgrade: Dijkstra + inter-moon edges; public API unchanged | ⬜ not started | `ksp dv laythe_low_orbit vall_low_orbit` picks the direct route |
 
 **Reset points:** between every sub-phase. After 7a passes, this file gets a 7a completion log + 7b resume notes, then we stop.
@@ -100,22 +100,38 @@ Shipped with TDD throughout. 13 new tests; 179 → 192 total. Lint clean. Spec a
 - **Configurable residual.** 20% is a module constant (`AEROBRAKE_RESIDUAL_PCT`). Can be promoted to a CLI flag (`--aerobrake-residual`) later if real usage shows the value should vary.
 - **Round-trip / return-leg aerobrake** deferred. API sketched in feature doc: `plan_round_trip(stops, margin_pct, aerobrake)`.
 
-### 7d resume point — Stage-aware budget check
+### Phase 7d completion log
 
-Spec lives in [features/dv-planner.md §7d](features/dv-planner.md#7d--stage-aware-budget-check). Inputs: staged ship as `list[(wet_kg, dry_kg, isp_s)]` + target trip. Use Tsiolkovsky (already in `orbital.py`) to compute available Δv per stage; verify coverage against planned legs; report which leg runs dry. Pairs with the Phase 5 TWR/Tsiolkovsky calculator — shared module.
+Shipped with TDD throughout. 9 new tests; 192 → 201 total. Lint clean. Spec at [docs/superpowers/specs/2026-04-23-dv-planner-7d-design.md](superpowers/specs/2026-04-23-dv-planner-7d-design.md); executed per the plan at [docs/superpowers/plans/2026-04-23-dv-planner-7d.md](superpowers/plans/2026-04-23-dv-planner-7d.md).
+
+- **Scope re-decision.** The original 7d (stage-aware Tsiolkovsky budget check) was dropped at the design step — per-edge output from 7a-c already supports in-game stage planning, and staging decisions live in KSP's VAB, not the planner. 7d was re-scoped to ship round-trip `--return` (deferred from 7c) plus an aerobrake-credit fix.
+- **Residual → 0%.** `AEROBRAKE_RESIDUAL_PCT: 20.0 → 0.0`. Aerobrakable edges now credit 100% under `aerobrake=True`, matching community-chart convention (chart values treat aerobrake descents as free). The 5% trip margin is the safety buffer for correction burns and imperfect passes. Constant kept as a module-level lever for future tuning. 7c pins updated in lockstep (Duna aerobraked 4,822 → 4,460; Eve 6,096 → 4,480).
+- **`plan_round_trip`.** Thin wrapper in `dv_map.py`: doubles the stops list (`[A, B]` → `[A, B, A]`, `[A, B, C]` → `[A, B, C, B, A]`) and delegates to `plan_trip`. `TripPlan` shape unchanged. Composes with `--via` so multi-stop round trips work for free.
+- **CLI.** `ksp dv` gained `--return` (Typer boolean, default off). Python parameter is `return_` (keyword collision); flag syntax is `--return`. Dispatch: `planner = plan_round_trip if return_ else plan_trip`.
+- **Renderer.** `_aero_cell` label derives from the module constant (`f"✓ −{100 - AEROBRAKE_RESIDUAL_PCT:g}%"`) so future residual tunes surface automatically. Stop annotation tightened from `— stop: <action> (<slug>) —` to `— stop: <action> —` (slug already visible in adjacent leg rows); avoids compressing the aero column on 80-col terminals under the wider round-trip table. Aero column pinned to `min_width=7` so `✓ −100%` renders in full.
+- **Acceptance.** `ksp dv kerbin_surface mun_surface --return` → raw 10,300 · aerobraked 6,900 (−3,400 Kerbin return descent) · planned @ 5% 7,245. `--no-aerobrake` round-trip → 10,300 / 10,815. Multi-stop round-trip composes: `--via mun:orbit --return` yields 4-leg itinerary.
+
+**Known follow-ups** (none block 7d):
+
+- **Turnaround annotation action mismatch.** When the end Stop uses the default `action="orbit"` but its slug is a surface (e.g. `mun_surface`), the turnaround annotation reads `— stop: orbit —` and the title reads `mun_surface(orbit)`. Cosmetic; fix by inferring action from slug suffix at the renderer or at Stop construction.
+- **Round-trip recomputes outbound edge lookups on the return leg.** Negligible at <200 graph nodes; could be cached if 7e's graph grows.
+
+### 7e resume point — Graph upgrade (Dijkstra + inter-moon shortcuts)
+
+Spec lives in [features/dv-planner.md §7e](features/dv-planner.md#7e--graph-upgrade-optional). Swap the LCA tree walk for Dijkstra, add inter-moon shortcut adjacencies (Mun↔Minmus, Laythe↔Vall, Mun↔Kerbin equatorial transfer, etc.) where the community chart publishes canonical values. Public API (`path_dv`, `plan_trip`, `plan_round_trip`) stays unchanged — callers don't notice.
 
 **First concrete next step** for a fresh session:
 
-1. Decide the data model: a new `Stage` dataclass in `dv_map.py` (or a new `budget.py` module), `list[Stage]` as the ship.
-2. RED: `test_budget_covers_kerbin_to_mun_round_trip` — canned 3-stage Mun lander (ascent + transfer + lander) against a kerbin_surface → mun_surface → kerbin_surface trip; assert the budget report confirms coverage.
-3. Decide the budget report shape. Suggested: `BudgetReport(legs: list[LegBudget], ok: bool, runs_dry_on: int | None)` where `LegBudget` tracks `required_dv`, `available_dv`, `remaining_after`.
-4. Wire stage accounting: which stage serves which leg? Simplest v1 is "consume stages in order; a stage is used until exhausted, then drop to next". Per-leg stage assignment is a v2 concern.
-5. CLI: `ksp dv-check <from> <to> --stage 9000,3000,345 --stage ... [--via ...] [--margin ...] [--no-aerobrake]`. Repeatable `--stage` with `wet,dry,isp` triple.
-6. Acceptance gate: feature-doc §7d — canned Mun lander sheet confirms reach-and-return.
+1. **Research pass.** Before touching code, enumerate which inter-moon / cross-branch shortcuts the Cuky chart actually provides canonical Δv values for. Target at least: Mun↔Minmus direct, Laythe↔Vall direct, and any other pair the chart shows. Create a candidate adjacency list with citations. Don't make values up — leave a pair out rather than guess.
+2. **Schema decision.** `dv_edges` already stores directed edges keyed on `(from_slug, to_slug)`; adding inter-moon edges is an adjacency-list change, not a schema change. Confirm the UNIQUE constraint doesn't block the new rows.
+3. **RED:** `test_laythe_to_vall_picks_direct_route` — seeded with the new Laythe↔Vall edge, Dijkstra should route direct (cheaper than through Jool LO). Same shape for Mun↔Minmus.
+4. **Algorithm swap.** Replace `path_dv`'s LCA walk with Dijkstra over `DvGraph`. Start node → goal node; edges weighted by `dv_m_s`. Return the same `list[Edge]` so `plan_trip` is untouched.
+5. **Regression guard.** All existing 7a/7b/7c/7d tests must still pass — the tree-only paths should still be cheapest when no shortcut is cheaper.
+6. **Also consider tackling** the deferred double-credit quirk on pre-baked capture edges (Eve 80, Duna 360, Kerbin 0) since the graph is being revisited anyway. Simplest fix: reclassify those as non-aerobrakable (the chart values already encode aerobrake), or add a per-edge `aerobrake_dv_m_s` override column.
 
-Files likely to change: `src/ksp_planner/dv_map.py` (or a new `budget.py`), `src/ksp_planner/cli.py`, plus tests.
+**Acceptance gate:** `ksp dv laythe_low_orbit vall_low_orbit` picks the direct route (single edge with Laythe↔Vall Δv) instead of routing through `jool_low_orbit`.
 
-Round-trip `--return` and `plan_round_trip` are still deferred — consider threading them in alongside 7d if the Mun-lander acceptance test needs round-trip semantics, otherwise defer further.
+Files likely to change: `src/ksp_planner/dv_map.py` (Dijkstra algorithm), `seeds/seed_stock.py` (new adjacencies), plus tests. Dependency addition (e.g. `graphlib` stdlib or `networkx`) evaluated case-by-case — `heapq`-based Dijkstra is ~15 lines, probably fine without a library.
 
 ---
 
@@ -160,8 +176,8 @@ KSP App/
     ├── test_orbital.py                 18 tests — known values + hypothesis properties
     ├── test_comms.py                   16 tests — worked example + edge cases
     ├── test_plans.py                   13 tests — save/load/delete round-trip, update semantics, validation
-    ├── test_dv_map.py                  36 tests — hand-built tree LCA + load_dv_graph + Hohmann cross-check + resolver + 7b acceptance
-    └── test_cli.py                     50 tests — all CLI subcommands incl. `plan {list,show,run,delete}` + `--save` + `dv` + `--via`
+    ├── test_dv_map.py                  50 tests — hand-built tree LCA + load_dv_graph + Hohmann cross-check + resolver + 7b/7c/7d acceptance
+    └── test_cli.py                     58 tests — all CLI subcommands incl. `plan {list,show,run,delete}` + `--save` + `dv` + `--via` + `--return`
 ```
 
 ---
@@ -178,7 +194,7 @@ KSP App/
 8. **Tree model for Phase 7 Δv planner** (seeded canonical chart values + flat 5% margin default). Graph upgrade is Phase 7e. *7a shipped 2026-04-21 — `dv_map.py` is pure (no DB import), DB loader lives in `db.py`.*
 9. **Δv chart attribution** *(Phase 7a)*: Kerbin trunk between `kerbin_low_orbit` and `kerbol_orbit` is all 0 because LKO is the implicit baseline parking orbit for every "LKO → X" chart number. Ejection burns live on `(planet_transfer ↔ planet_capture)`; capture burns on `(planet_capture ↔ planet_LO)`. Trips from Kerbin match the chart exactly; trips originating elsewhere (e.g., Duna→Eve) are roughly correct but not chart-tuned — documented limitation, addressed in 7e graph upgrade.
 10. **`flyby` resolves to `_transfer`, not `_capture`** *(Phase 7b)*: the design-doc mapping `flyby → _capture` was self-contradictory — `_capture` is the state *after* the capture burn, which by definition isn't a flyby. `_transfer` (approach trajectory, no burn to stay) is consistent across planets and moons. Flyby is pure tree itinerary, not a gravity-assist model; the community chart doesn't encode slingshot savings.
-11. **`can_aerobrake` credits 80% of ballistic dv** *(Phase 7c)*: `AEROBRAKE_RESIDUAL_PCT = 20.0` leaves a 20% residual rather than zeroing, covering correction burns, safety margin, and imperfect atmospheric passes. `total_raw` stays ballistic regardless of the flag — aerobrake only affects `total_aerobraked` and `total_aerobraked_planned`. Known quirk: the three pre-baked capture edges (Eve 80, Duna 360, Kerbin 0) are double-credited; error bounded to ≤ ~350 m/s; fix deferred to 7e.
+11. **`can_aerobrake` credits 100% of ballistic dv** *(Phase 7c → 7d)*: `AEROBRAKE_RESIDUAL_PCT = 0.0` (shipped 7c at 20%; flipped to 0% in 7d to match community-chart convention — chart values treat aerobrake descents as free). The 5% trip margin is the safety buffer for correction burns and imperfect passes. Constant kept as a module lever for future tuning. `total_raw` stays ballistic regardless of the flag — aerobrake only affects `total_aerobraked` and `total_aerobraked_planned`. Known quirk: the three pre-baked capture edges (Eve 80, Duna 360, Kerbin 0) are double-credited — at 0% residual these round to ~0 so the error band collapses to at most 80 m/s across an Eve+Duna outbound, but the data-model inaccuracy (chart-baked values flagged as `can_aerobrake=True`) still stands; fix deferred to 7e.
 
 ---
 
@@ -210,6 +226,8 @@ uv run ksp dv kerbin_surface mun_surface --via minmus:orbit              # Phase
 uv run ksp dv kerbin_surface jool_low_orbit --via duna:flyby --via eve:flyby
 uv run ksp dv kerbin_surface duna_surface                                # Phase 7c (default: aerobrake on)
 uv run ksp dv kerbin_surface duna_surface --no-aerobrake                 # Phase 7c (disable credit)
+uv run ksp dv kerbin_surface mun_surface --return                        # Phase 7d (round-trip)
+uv run ksp dv kerbin_surface minmus_surface --via mun:orbit --return     # Phase 7d (multi-stop round-trip)
 ```
 
 ---
