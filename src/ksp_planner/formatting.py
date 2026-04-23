@@ -207,9 +207,7 @@ def dv_trip_panel(trip, from_slug: str, to_slug: str) -> Panel:
                 f"{edge.dv_m_s:>7,.0f} m/s",
                 _aero_cell(edge),
             )
-        # Emit stop annotation after each leg except the last. Slug is already
-        # visible in the adjacent leg rows, so the annotation only carries the
-        # action label — keeps the row short on narrow terminals.
+        # Emit stop annotation after each leg except the last.
         if leg_idx < len(intermediate_stops):
             stop = intermediate_stops[leg_idx]
             legs_table.add_row(

@@ -173,7 +173,7 @@ def plan_round_trip(
     """
     if len(stops) < 2:
         raise ValueError("round trip requires at least two stops")
-    doubled = list(stops) + list(reversed(stops[:-1]))
+    doubled = [*stops, *reversed(stops[:-1])]
     return plan_trip(graph, doubled, margin_pct=margin_pct, aerobrake=aerobrake)
 
 
