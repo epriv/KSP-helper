@@ -159,6 +159,24 @@ def plan_trip(
     )
 
 
+def plan_round_trip(
+    graph: DvGraph,
+    stops: list[Stop],
+    margin_pct: float = 5.0,
+    aerobrake: bool = True,
+) -> TripPlan:
+    """Plan a round trip that returns to the starting stop.
+
+    Doubles the itinerary: `[A, B]` → `[A, B, A]`; `[A, B, C]` → `[A, B, C, B, A]`.
+    The doubled stops list is passed to `plan_trip`, which produces legs for every
+    pairwise hop. Composes with intermediate stops and aerobrake credit.
+    """
+    if len(stops) < 2:
+        raise ValueError("round trip requires at least two stops")
+    doubled = list(stops) + list(reversed(stops[:-1]))
+    return plan_trip(graph, doubled, margin_pct=margin_pct, aerobrake=aerobrake)
+
+
 def resolve_stop(graph: DvGraph, body_slug: str, action: str) -> Stop:
     """Map (body, action) → Stop with the corresponding tree-node slug.
 

@@ -442,3 +442,71 @@ def test_kerbin_to_eve_surface_aerobraked_shows_dramatic_savings(db):
     assert plan.total_raw == pytest.approx(12560, abs=10)
     assert plan.total_aerobraked == pytest.approx(4480, abs=10)
     assert plan.total_raw - plan.total_aerobraked > 8000
+
+
+# ---------- 7d: round-trip ----------
+
+
+def test_plan_round_trip_two_stops_doubles_itinerary(tree):
+    """[A, B] → legs for A→B→A; two legs, mirror image."""
+    from ksp_planner.dv_map import plan_round_trip
+
+    plan = plan_round_trip(tree, [Stop("c"), Stop("f")])
+    assert len(plan.legs) == 2
+    # Stops list on the TripPlan is doubled: [c, f, c]
+    assert [s.slug for s in plan.stops] == ["c", "f", "c"]
+    # Outbound c→f via a: 1 + 12 + 14 = 27. Return f→c via a: 4 + 2 + 11 = 17.
+    assert plan.total_raw == 44
+
+
+def test_plan_round_trip_three_stops_doubles_with_turnaround(tree):
+    """[A, B, C] → legs for A→B→C→B→A; four legs."""
+    from ksp_planner.dv_map import plan_round_trip
+
+    plan = plan_round_trip(tree, [Stop("c"), Stop("e"), Stop("f")])
+    assert len(plan.legs) == 4
+    assert [s.slug for s in plan.stops] == ["c", "e", "f", "e", "c"]
+
+
+def test_plan_round_trip_requires_two_stops(tree):
+    """Single stop is not a round trip."""
+    from ksp_planner.dv_map import plan_round_trip
+
+    with pytest.raises(ValueError, match="at least two stops"):
+        plan_round_trip(tree, [Stop("c")])
+
+
+def test_plan_round_trip_kerbin_to_mun_with_aerobrake(db):
+    """Canonical acceptance: Kerbin surface → Mun surface → Kerbin surface.
+
+    Outbound: 3,400 (ascent) + 860 (Mun transfer) + 310 (capture) + 580 (descent) = 5,150
+    Return:   580 (ascent) + 310 (Mun escape) + 860 (Kerbin capture) + 3,400 (descent) = 5,150
+        └─ Kerbin descent is can_aerobrake=True, credits to 0 under aerobrake=True.
+    Return aerobraked: 580 + 310 + 860 + 0 = 1,750
+    Round-trip raw: 10,300 · aerobraked: 6,900 · planned @ 5%: 7,245
+    """
+    from ksp_planner.db import load_dv_graph
+    from ksp_planner.dv_map import plan_round_trip
+
+    g = load_dv_graph(db)
+    plan = plan_round_trip(g, [Stop("kerbin_surface"), Stop("mun_surface")])
+    assert plan.total_raw == pytest.approx(10300, abs=5)
+    assert plan.total_aerobraked == pytest.approx(6900, abs=5)
+    assert plan.total_aerobraked_planned == pytest.approx(6900 * 1.05, abs=10)
+    assert plan.aerobrake is True
+    # 2 legs: outbound + return
+    assert len(plan.legs) == 2
+
+
+def test_plan_round_trip_kerbin_to_mun_no_aerobrake(db):
+    """Without aerobrake, return Kerbin descent is fully ballistic — raw == aerobraked."""
+    from ksp_planner.db import load_dv_graph
+    from ksp_planner.dv_map import plan_round_trip
+
+    g = load_dv_graph(db)
+    plan = plan_round_trip(
+        g, [Stop("kerbin_surface"), Stop("mun_surface")], aerobrake=False
+    )
+    assert plan.total_raw == pytest.approx(10300, abs=5)
+    assert plan.total_aerobraked == plan.total_raw
+    assert plan.aerobrake is False
