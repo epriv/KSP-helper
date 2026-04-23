@@ -51,9 +51,10 @@ ACTION_SUFFIXES = {
     "flyby": "_transfer",
 }
 
-# 20% residual = aerobrake credits 80% of a can_aerobrake edge's ballistic dv.
-# Residual covers correction burns, safety margin, and imperfect atmospheric passes.
-AEROBRAKE_RESIDUAL_PCT = 20.0
+# 0% residual = aerobrake fully credits can_aerobrake edges (community-chart convention).
+# The 5% trip margin is the safety buffer for correction burns and imperfect passes.
+# Kept as a module constant so a future tune (e.g. 5%) is still a one-line change.
+AEROBRAKE_RESIDUAL_PCT = 0.0
 
 
 class DvGraph:

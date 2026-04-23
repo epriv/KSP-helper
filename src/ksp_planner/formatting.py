@@ -8,7 +8,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from ksp_planner.dv_map import ACTION_SUFFIXES
+from ksp_planner.dv_map import ACTION_SUFFIXES, AEROBRAKE_RESIDUAL_PCT
 
 
 def fmt_dist(m: float | None) -> str:
@@ -174,7 +174,8 @@ def dv_trip_panel(trip, from_slug: str, to_slug: str) -> Panel:
     inserted between legs for each intermediate stop.
 
     The `aero` column is tri-state:
-        - "✓ −80%"  : edge is can_aerobrake=True and trip.aerobrake is True
+        - "✓ −N%"   : edge is can_aerobrake=True and trip.aerobrake is True
+                      (N = 100 − AEROBRAKE_RESIDUAL_PCT, i.e. the discount applied)
         - "✓ off"   : edge is can_aerobrake=True but trip.aerobrake is False
         - ""        : edge cannot be aerobraked
 
@@ -196,10 +197,12 @@ def dv_trip_panel(trip, from_slug: str, to_slug: str) -> Panel:
     legs_table.add_column("Δv", justify="right")
     legs_table.add_column("aero", justify="center")
 
+    credit_pct = 100 - AEROBRAKE_RESIDUAL_PCT
+
     def _aero_cell(edge) -> str:
         if not edge.can_aerobrake:
             return ""
-        return "✓ −80%" if trip.aerobrake else "✓ off"
+        return f"✓ −{credit_pct:g}%" if trip.aerobrake else "✓ off"
 
     for leg_idx, leg in enumerate(trip.legs):
         for edge in leg:

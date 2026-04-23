@@ -179,13 +179,13 @@ def aero_tree() -> DvGraph:
     return DvGraph(nodes=nodes, edges=edges)
 
 
-def test_plan_trip_aerobrake_credits_capable_edge(aero_tree):
-    """1000 m/s descent with can_aerobrake=True → credited to 200 at 20% residual."""
+def test_plan_trip_aerobrake_zeroes_capable_edge(aero_tree):
+    """1000 m/s descent with can_aerobrake=True → credited to 0 at 0% residual."""
     plan = plan_trip(aero_tree, [Stop("a"), Stop("d")])
     # raw = 1000 (single descent edge)
     assert plan.total_raw == 1000
-    # aerobraked = 1000 * 0.20 = 200
-    assert plan.total_aerobraked == pytest.approx(200.0)
+    # aerobraked = 1000 * 0.00 = 0 (full credit at 0% residual)
+    assert plan.total_aerobraked == pytest.approx(0.0)
     assert plan.aerobrake is True
 
 
@@ -205,22 +205,29 @@ def test_plan_trip_mixed_edges_only_discounts_flagged(tree):
 
 
 def test_plan_trip_aerobrake_planned_applies_margin(aero_tree):
-    """total_aerobraked_planned == total_aerobraked * (1 + margin/100)."""
-    plan = plan_trip(aero_tree, [Stop("a"), Stop("d")])  # default 5%
-    assert plan.total_aerobraked == pytest.approx(200.0)
-    assert plan.total_aerobraked_planned == pytest.approx(200.0 * 1.05)
+    """total_aerobraked_planned == total_aerobraked * (1 + margin/100).
+
+    Uses root→d path so aerobraked total is non-zero (100 from the non-aero
+    root→a edge), making the 5% scaling meaningfully testable.
+    """
+    plan = plan_trip(aero_tree, [Stop("root"), Stop("d")])  # default 5%
+    # raw = 100 (root→a, non-aero) + 1000 (a→d, aero) = 1100
+    # aerobraked = 100 + 0 = 100 at 0% residual
+    assert plan.total_aerobraked == pytest.approx(100.0)
+    assert plan.total_aerobraked_planned == pytest.approx(100.0 * 1.05)
 
 
 def test_plan_trip_aerobrake_planned_scales_with_custom_margin(aero_tree):
-    plan = plan_trip(aero_tree, [Stop("a"), Stop("d")], margin_pct=10.0)
-    assert plan.total_aerobraked_planned == pytest.approx(200.0 * 1.10)
+    plan = plan_trip(aero_tree, [Stop("root"), Stop("d")], margin_pct=10.0)
+    assert plan.total_aerobraked == pytest.approx(100.0)
+    assert plan.total_aerobraked_planned == pytest.approx(100.0 * 1.10)
 
 
-def test_plan_trip_aerobrake_residual_constant_is_20():
-    """Sanity-pin the module constant so a future edit is caught by CI."""
+def test_plan_trip_aerobrake_residual_constant_is_zero():
+    """AEROBRAKE_RESIDUAL_PCT is the module lever (0.0 → aerobrake zeros capable edges)."""
     from ksp_planner.dv_map import AEROBRAKE_RESIDUAL_PCT
 
-    assert AEROBRAKE_RESIDUAL_PCT == 20.0
+    assert AEROBRAKE_RESIDUAL_PCT == 0.0
 
 
 # ---------- seed integration: load_dv_graph + chart smoke ----------
@@ -402,14 +409,14 @@ def test_kerbin_via_minmus_orbit_to_mun_surface_acceptance(db):
 
 
 def test_kerbin_to_duna_surface_aerobraked_totals(db):
-    """kerbin→duna: raw 6,270; aerobraked ≈ 4,822 (duna capture 360→72, duna descent 1450→290)."""
+    """kerbin→duna: raw 6,270; aerobraked 4,460 (duna capture 360→0, duna descent 1450→0)."""
     from ksp_planner.db import load_dv_graph
 
     g = load_dv_graph(db)
     plan = plan_trip(g, [Stop("kerbin_surface"), Stop("duna_surface")])
     assert plan.total_raw == pytest.approx(6270, abs=5)
-    assert plan.total_aerobraked == pytest.approx(4822, abs=5)
-    assert plan.total_aerobraked_planned == pytest.approx(4822 * 1.05, abs=10)
+    assert plan.total_aerobraked == pytest.approx(4460, abs=5)
+    assert plan.total_aerobraked_planned == pytest.approx(4460 * 1.05, abs=10)
     assert plan.aerobrake is True
 
 
@@ -424,16 +431,14 @@ def test_kerbin_to_mun_surface_aerobrake_is_noop(db):
 
 
 def test_kerbin_to_eve_surface_aerobraked_shows_dramatic_savings(db):
-    """Eve descent (8000 ballistic) credited at 80% → ~1,600 + small quirk on capture."""
+    """Eve descent (8000 ballistic) + Eve capture (80) both zeroed at 0% residual."""
     from ksp_planner.db import load_dv_graph
 
     g = load_dv_graph(db)
     plan = plan_trip(g, [Stop("kerbin_surface"), Stop("eve_surface")])
-    # Outbound: 3400 + 0 + 0 + 0 + 0 + 1080 + 80 + 8000 = 12,560
-    # With aerobrake: 3400 + 0 + 0 + 0 + 0 + 1080 + 16 + 1600 = 6,096
-    # (eve_capture→eve_low_orbit 80 is already chart-baked; double-credit → 16 residual,
-    #  accepted per 7c spec.)
+    # Outbound: 3400 (ascent, up — not aerobrakable) + 0 (trunk) + 1080 (Eve ejection)
+    #           + 80 (Eve capture) + 8000 (Eve descent) = 12,560
+    # With aerobrake: 3400 + 0 + 1080 + 0 + 0 = 4,480
     assert plan.total_raw == pytest.approx(12560, abs=10)
-    assert plan.total_aerobraked == pytest.approx(6096, abs=10)
-    # savings should be large (> 6000 m/s)
-    assert plan.total_raw - plan.total_aerobraked > 6000
+    assert plan.total_aerobraked == pytest.approx(4480, abs=10)
+    assert plan.total_raw - plan.total_aerobraked > 8000

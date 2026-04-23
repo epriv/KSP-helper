@@ -472,7 +472,7 @@ def test_dv_via_annotation_shows_action_in_output(seed_db):
     assert "minmus_low_orbit" in r.stdout
 
 
-# ---------- 7c: aerobrake rendering ----------
+# ---------- 7c/7d: aerobrake rendering ----------
 
 
 def test_dv_kerbin_to_duna_shows_with_aerobrake_row(seed_db):
@@ -481,17 +481,17 @@ def test_dv_kerbin_to_duna_shows_with_aerobrake_row(seed_db):
     assert r.exit_code == 0, r.stdout
     assert "Raw total" in r.stdout
     assert "With aerobrake" in r.stdout
-    # raw 6,270; aerobraked 4,822; planned aerobraked 5,063
+    # raw 6,270; aerobraked 4,460; planned aerobraked 4,683
     assert "6,270" in r.stdout
-    assert "4,822" in r.stdout
+    assert "4,460" in r.stdout
 
 
 def test_dv_aerobrake_column_marks_credited_edges(seed_db):
-    """The aero column shows '−80%' on can_aerobrake=True edges when aerobrake is on."""
+    """The aero column shows '−100%' on can_aerobrake=True edges when aerobrake is on."""
     r = _invoke(seed_db, "dv", "kerbin_surface", "duna_surface")
     assert r.exit_code == 0, r.stdout
     # Duna descent and duna_capture→duna_low_orbit are both creditable
-    assert "−80%" in r.stdout or "-80%" in r.stdout  # accept either hyphen shape
+    assert "−100%" in r.stdout or "-100%" in r.stdout  # accept either hyphen shape
 
 
 def test_dv_no_aerobrake_hides_with_aerobrake_row(seed_db):
@@ -505,8 +505,8 @@ def test_dv_no_aerobrake_hides_with_aerobrake_row(seed_db):
 
 
 def test_dv_no_aerobrake_aero_column_shows_off(seed_db):
-    """--no-aerobrake: aero column on creditable edges shows '✓ off' not '−80%'."""
+    """--no-aerobrake: aero column on creditable edges shows '✓ off' not '−100%'."""
     r = _invoke(seed_db, "dv", "kerbin_surface", "duna_surface", "--no-aerobrake")
     assert r.exit_code == 0, r.stdout
     assert "off" in r.stdout
-    assert "−80%" not in r.stdout and "-80%" not in r.stdout
+    assert "−100%" not in r.stdout and "-100%" not in r.stdout
