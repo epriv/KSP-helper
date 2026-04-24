@@ -102,11 +102,11 @@ def test_unknown_to_slug_raises(tree):
         path_dv(tree, "a", "ghost")
 
 
-def test_missing_edge_raises(tree):
-    # break the graph by removing one direction
+def test_missing_edge_makes_node_unreachable(tree):
+    """Remove the only incoming edge to `f` — Dijkstra surfaces it as ValueError."""
     bad_edges = [e for e in tree._edges.values() if not (e.from_slug == "d" and e.to_slug == "f")]
     broken = DvGraph(nodes=list(tree._nodes.values()), edges=bad_edges)
-    with pytest.raises(KeyError, match=r"d.*f"):
+    with pytest.raises(ValueError, match=r"no path from 'a' to 'f'"):
         path_dv(broken, "a", "f")
 
 
@@ -510,3 +510,75 @@ def test_plan_round_trip_kerbin_to_mun_no_aerobrake(db):
     assert plan.total_raw == pytest.approx(10300, abs=5)
     assert plan.total_aerobraked == plan.total_raw
     assert plan.aerobrake is False
+
+
+# ---------- 7e: Dijkstra shortcut handling ----------
+
+
+def test_dijkstra_picks_cheapest_edge_when_shortcut_exists():
+    """Synthetic graph with a shortcut cheaper than the tree walk.
+
+    Nodes: root, a (child of root), b (child of a), c (child of root).
+    Tree-direct a→b: 30. Shortcut path a→root→c→b: 10 + 5 + 2 = 17.
+    Dijkstra must pick the 17 shortcut; an LCA walk would take the 30.
+    """
+    from ksp_planner.dv_map import DvGraph, DvNode, Edge, path_dv
+
+    nodes = [
+        DvNode(slug="root", parent_slug=None, body_slug=None, state="sun_orbit"),
+        DvNode(slug="a", parent_slug="root", body_slug=None, state="transfer"),
+        DvNode(slug="b", parent_slug="a", body_slug=None, state="low_orbit"),
+        DvNode(slug="c", parent_slug="root", body_slug=None, state="transfer"),
+    ]
+    edges = [
+        Edge(from_slug="root", to_slug="a", dv_m_s=10, can_aerobrake=False),
+        Edge(from_slug="a", to_slug="root", dv_m_s=10, can_aerobrake=False),
+        Edge(from_slug="a", to_slug="b", dv_m_s=30, can_aerobrake=False),
+        Edge(from_slug="b", to_slug="a", dv_m_s=30, can_aerobrake=False),
+        Edge(from_slug="root", to_slug="c", dv_m_s=5, can_aerobrake=False),
+        Edge(from_slug="c", to_slug="root", dv_m_s=5, can_aerobrake=False),
+        # Cross-branch shortcut: c ↔ b directly
+        Edge(from_slug="c", to_slug="b", dv_m_s=2, can_aerobrake=False),
+        Edge(from_slug="b", to_slug="c", dv_m_s=2, can_aerobrake=False),
+    ]
+    g = DvGraph(nodes=nodes, edges=edges)
+
+    path = path_dv(g, "a", "b")
+    total = sum(e.dv_m_s for e in path)
+    hops = [(e.from_slug, e.to_slug) for e in path]
+    assert total == 17, f"expected 17 via shortcut, got {total} via {hops}"
+    assert hops == [("a", "root"), ("root", "c"), ("c", "b")]
+
+
+def test_dijkstra_unreachable_raises_value_error():
+    """Two disconnected components → ValueError (same type as the old LCA walk)."""
+    from ksp_planner.dv_map import DvGraph, DvNode, path_dv
+
+    nodes = [
+        DvNode(slug="x", parent_slug=None, body_slug=None, state="sun_orbit"),
+        DvNode(slug="y", parent_slug=None, body_slug=None, state="sun_orbit"),
+    ]
+    g = DvGraph(nodes=nodes, edges=[])
+    with pytest.raises(ValueError, match="no path"):
+        path_dv(g, "x", "y")
+
+
+def test_dijkstra_self_loop_returns_empty():
+    """Identity path: from == to → []; no search."""
+    from ksp_planner.dv_map import DvGraph, DvNode, path_dv
+
+    nodes = [DvNode(slug="only", parent_slug=None, body_slug=None, state="sun_orbit")]
+    g = DvGraph(nodes=nodes, edges=[])
+    assert path_dv(g, "only", "only") == []
+
+
+def test_dijkstra_unknown_slug_raises_key_error():
+    """Unknown endpoints raise KeyError, same as under the LCA walk."""
+    from ksp_planner.dv_map import DvGraph, DvNode, path_dv
+
+    nodes = [DvNode(slug="a", parent_slug=None, body_slug=None, state="sun_orbit")]
+    g = DvGraph(nodes=nodes, edges=[])
+    with pytest.raises(KeyError):
+        path_dv(g, "a", "nonexistent")
+    with pytest.raises(KeyError):
+        path_dv(g, "nonexistent", "a")

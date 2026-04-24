@@ -1,11 +1,12 @@
-"""Δv chart tree + path finding — Phase 7a.
+"""Δv chart graph + path finding — Phase 7a (Dijkstra since 7e).
 
-Pure data structures over a directed-edge tree. The DB layer loads `DvGraph`;
+Pure data structures over a directed graph. The DB layer loads `DvGraph`;
 `path_dv` and `plan_trip` operate on the graph with no I/O.
 """
 
 from __future__ import annotations
 
+import heapq
 from dataclasses import dataclass
 from itertools import pairwise
 from typing import Literal
@@ -58,11 +59,17 @@ AEROBRAKE_RESIDUAL_PCT = 0.0
 
 
 class DvGraph:
-    """Bundle of nodes + directed edges. Indexed for O(1) parent and edge lookup."""
+    """Bundle of nodes + directed edges.
+
+    Indexed for O(1) edge lookup and O(deg(u)) neighbor iteration.
+    """
 
     def __init__(self, nodes: list[DvNode], edges: list[Edge]):
         self._nodes: dict[str, DvNode] = {n.slug: n for n in nodes}
         self._edges: dict[tuple[str, str], Edge] = {(e.from_slug, e.to_slug): e for e in edges}
+        self._adj: dict[str, list[Edge]] = {}
+        for e in edges:
+            self._adj.setdefault(e.from_slug, []).append(e)
 
     def node(self, slug: str) -> DvNode:
         if slug not in self._nodes:
@@ -75,54 +82,55 @@ class DvGraph:
             raise KeyError(f"no dv edge from {from_slug!r} to {to_slug!r}")
         return self._edges[key]
 
-
-def _ancestors(graph: DvGraph, slug: str) -> list[str]:
-    """Slug + every ancestor up to (and including) the root."""
-    chain = [slug]
-    cur = graph.node(slug).parent_slug
-    while cur is not None:
-        chain.append(cur)
-        cur = graph.node(cur).parent_slug
-    return chain
-
-
-def _lowest_common_ancestor(graph: DvGraph, a: str, b: str) -> str:
-    a_chain = _ancestors(graph, a)
-    b_set = set(_ancestors(graph, b))
-    for slug in a_chain:
-        if slug in b_set:
-            return slug
-    raise ValueError(f"no common ancestor for {a!r} and {b!r}")
+    def neighbors_of(self, slug: str) -> list[Edge]:
+        if slug not in self._nodes:
+            raise KeyError(f"unknown dv node: {slug!r}")
+        return self._adj.get(slug, [])
 
 
 def path_dv(graph: DvGraph, from_slug: str, to_slug: str) -> list[Edge]:
-    """Edges traversed when walking the tree from `from_slug` to `to_slug`."""
+    """Shortest-Δv path from `from_slug` to `to_slug` (Dijkstra).
+
+    Raises KeyError if either slug is unknown; ValueError if no path exists.
+    Returns `[]` when `from_slug == to_slug`.
+    """
     if from_slug == to_slug:
-        graph.node(from_slug)  # surface KeyError on unknown slug
+        graph.node(from_slug)
         return []
+    graph.node(from_slug)
+    graph.node(to_slug)
 
-    lca = _lowest_common_ancestor(graph, from_slug, to_slug)
+    dist: dict[str, float] = {from_slug: 0.0}
+    prev: dict[str, tuple[str, Edge]] = {}
+    counter = 0  # monotonic tiebreaker — avoids comparing strings on equal distances
+    heap: list[tuple[float, int, str]] = [(0.0, counter, from_slug)]
 
-    up: list[Edge] = []
-    cur = from_slug
-    while cur != lca:
-        parent = graph.node(cur).parent_slug
-        up.append(graph.edge(cur, parent))
-        cur = parent
+    while heap:
+        d, _, u = heapq.heappop(heap)
+        if u == to_slug:
+            break
+        if d > dist.get(u, float("inf")):
+            continue
+        for edge in graph.neighbors_of(u):
+            v = edge.to_slug
+            nd = d + edge.dv_m_s
+            if nd < dist.get(v, float("inf")):
+                dist[v] = nd
+                prev[v] = (u, edge)
+                counter += 1
+                heapq.heappush(heap, (nd, counter, v))
 
-    descent: list[str] = []
+    if to_slug not in prev:
+        raise ValueError(f"no path from {from_slug!r} to {to_slug!r}")
+
+    edges: list[Edge] = []
     cur = to_slug
-    while cur != lca:
-        descent.append(cur)
-        cur = graph.node(cur).parent_slug
-
-    down: list[Edge] = []
-    cur = lca
-    for nxt in reversed(descent):
-        down.append(graph.edge(cur, nxt))
-        cur = nxt
-
-    return up + down
+    while cur != from_slug:
+        parent, edge = prev[cur]
+        edges.append(edge)
+        cur = parent
+    edges.reverse()
+    return edges
 
 
 def plan_trip(
