@@ -3,7 +3,7 @@
 > Resumable status snapshot. Paired with [01-phases.md](01-phases.md) (the plan) and [02-data-sources.md](02-data-sources.md) (the data provenance).
 
 **Last updated:** 2026-04-23
-**Tests:** 201 passing · **Lint:** clean · **Coverage:** 98% overall, 100% on `orbital.py` and `db.py`.
+**Tests:** 207 passing · **Lint:** clean · **Coverage:** 96% overall, 100% on `orbital.py` and `db.py`.
 
 ---
 
@@ -18,7 +18,7 @@
 | 4 | CLI shell (Typer + Rich) | ✅ done | Subcommands: `body`, `bodies`, `antennas`, `dsn`, `comms`, `hohmann`, `twr`, `dv-budget`, `plan {list,show,run,delete}` |
 | 5 | Hohmann / TWR / Tsiolkovsky | ✅ done | Kerbin→Duna matches canonical 1060 m/s ejection |
 | 6 | Mission plan persistence | ✅ done | All four calculators support `--save NAME`; `ksp plan {list,show,run,delete}` covers round-trip |
-| 7 | Δv planner (tree model, margin, stops) | 🟡 in progress (7a ✅; 7b ✅; 7c ✅; 7d ✅; 7e next) | Design locked in [features/dv-planner.md](features/dv-planner.md); sub-phase ladder below |
+| 7 | Δv planner (Dijkstra graph, margin, stops, round-trip) | ✅ done | Shipped 7a–7e; design locked in [features/dv-planner.md](features/dv-planner.md); sub-phase ladder below |
 | 8 | Web UI + prod1 deploy (FastAPI + systemd + nginx) | ⬜ not started | |
 | 9 | Mod packs / KSP2 seeds | ⬜ not started | |
 
@@ -40,7 +40,7 @@ Design locked in [features/dv-planner.md](features/dv-planner.md). The spec spli
 | 7b | Intermediate stops with per-stop `action` (`land` / `orbit` / `flyby`); `--via body[:action]` repeatable on CLI | ✅ done | `kerbin_surface → minmus (orbit) → mun_surface` = 7,330 m/s raw / 7,696 @ 5% |
 | 7c | Aerobraking credit on one-way trips: `aerobrake` kwarg on `plan_trip`, `--no-aerobrake` CLI flag, tri-state aero column + dual totals. Round-trip `--return` deferred. | ✅ done | `ksp dv kerbin_surface duna_surface` shows raw 6,270 · with aerobrake 4,822 (−1,448 m/s Duna savings) |
 | 7d | *Re-scoped:* round-trip `--return` + aerobrake residual → 0% (community-chart convention). Stage-aware budget check dropped — per-edge output already supports in-game stage planning. | ✅ done | `ksp dv kerbin_surface mun_surface --return` = 10,300 raw / 6,900 aerobraked / 7,245 @ 5% |
-| 7e | Optional graph upgrade: Dijkstra + inter-moon edges; public API unchanged | ⬜ not started | `ksp dv laythe_low_orbit vall_low_orbit` picks the direct route |
+| 7e | Dijkstra swap + double-credit fix on pre-baked capture edges (no chart-sourced shortcut edges exist) | ✅ done | Existing 201 tests stay green under Dijkstra; `kerbin_surface → duna_surface` aerobraked shifts 4,460 → 4,820 after capture-edge reclassification |
 
 **Reset points:** between every sub-phase. After 7a passes, this file gets a 7a completion log + 7b resume notes, then we stop.
 
@@ -116,22 +116,23 @@ Shipped with TDD throughout. 9 new tests; 192 → 201 total. Lint clean. Spec at
 - **Turnaround annotation action mismatch.** When the end Stop uses the default `action="orbit"` but its slug is a surface (e.g. `mun_surface`), the turnaround annotation reads `— stop: orbit —` and the title reads `mun_surface(orbit)`. Cosmetic; fix by inferring action from slug suffix at the renderer or at Stop construction.
 - **Round-trip recomputes outbound edge lookups on the return leg.** Negligible at <200 graph nodes; could be cached if 7e's graph grows.
 
-### 7e resume point — Graph upgrade (Dijkstra + inter-moon shortcuts)
+### Phase 7e completion log
 
-Spec lives in [features/dv-planner.md §7e](features/dv-planner.md#7e--graph-upgrade-optional). Swap the LCA tree walk for Dijkstra, add inter-moon shortcut adjacencies (Mun↔Minmus, Laythe↔Vall, Mun↔Kerbin equatorial transfer, etc.) where the community chart publishes canonical values. Public API (`path_dv`, `plan_trip`, `plan_round_trip`) stays unchanged — callers don't notice.
+Shipped with TDD throughout. 6 net new tests (4 Dijkstra synthetic + 3 parametrized capture-edge siblings − 1 renamed/merged); 201 → 207 total. Lint clean. Spec at [docs/superpowers/specs/2026-04-23-dv-planner-7e-design.md](superpowers/specs/2026-04-23-dv-planner-7e-design.md); executed per the plan at [docs/superpowers/plans/2026-04-23-dv-planner-7e.md](superpowers/plans/2026-04-23-dv-planner-7e.md).
 
-**First concrete next step** for a fresh session:
+- **Scope redirection.** The planned 7e acceptance gate (`ksp dv laythe_low_orbit vall_low_orbit picks the direct route`) was reframed after a research pass audited the canonical Cuky subway chart (Kowgan SVG + KSP forum thread + SpaceDock) and found **zero** published inter-moon or cross-branch edges. Per the "don't invent values" project rule, no new adjacencies were seeded. The phase still shipped the algorithm generalisation (Dijkstra) and the long-deferred double-credit fix.
+- **Dijkstra over LCA walk.** `src/ksp_planner/dv_map.py::path_dv` now uses stdlib `heapq` for shortest-path search. Public API unchanged — `plan_trip` and `plan_round_trip` compose through untouched. `DvGraph.neighbors_of(slug)` added with an adjacency list built at init. Private `_ancestors` / `_lowest_common_ancestor` helpers removed. The existing 201 tests stay green as the tree-equivalence regression guard. One legacy test renamed (`test_missing_edge_raises` → `test_missing_edge_makes_node_unreachable`) because a missing edge now surfaces as `ValueError("no path")` rather than `KeyError` — Dijkstra treats reachability as a graph property, not a schema violation.
+- **Double-credit fix.** Three pre-baked capture edges reclassified `can_aerobrake=False`: `eve_capture → eve_low_orbit` (80 m/s), `duna_capture → duna_low_orbit` (360 m/s), `kerbin_capture → kerbin_low_orbit` (0 m/s). The chart values already encode aerobrake, so crediting them again under `aerobrake=True` was double-counting. Arithmetic impact:
+  - `kerbin_surface → duna_surface` aerobraked: **4,460 → 4,820 m/s** (only the 1,450 Duna descent now credits — Duna savings are correctly 1,450 m/s).
+  - `kerbin_surface → eve_surface` aerobraked: **4,480 → 4,560 m/s** (only the 8,000 Eve descent credits — Eve savings are correctly 8,000 m/s).
+  - `kerbin_surface → mun_surface --return` unchanged (path doesn't traverse these edges).
+  - `kerbin_capture → kerbin_low_orbit` is 0 m/s, so arithmetic is unchanged; flag flipped for consistency with Eve/Duna siblings.
+- **Acceptance.** Full suite green under Dijkstra (207 tests). Synthetic `test_dijkstra_picks_cheapest_edge_when_shortcut_exists` proves future shortcut edges will be honored (a graph with both tree path 30 and cross-branch shortcut 17 → Dijkstra picks 17). Unreachable-node, self-loop, and unknown-slug behaviour covered by three sibling tests.
+- **Docs.** `docs/02-data-sources.md` now documents that the community chart has no inter-moon shortcut edges. `docs/features/dv-planner.md` §7e updated to reflect shipped scope.
 
-1. **Research pass.** Before touching code, enumerate which inter-moon / cross-branch shortcuts the Cuky chart actually provides canonical Δv values for. Target at least: Mun↔Minmus direct, Laythe↔Vall direct, and any other pair the chart shows. Create a candidate adjacency list with citations. Don't make values up — leave a pair out rather than guess.
-2. **Schema decision.** `dv_edges` already stores directed edges keyed on `(from_slug, to_slug)`; adding inter-moon edges is an adjacency-list change, not a schema change. Confirm the UNIQUE constraint doesn't block the new rows.
-3. **RED:** `test_laythe_to_vall_picks_direct_route` — seeded with the new Laythe↔Vall edge, Dijkstra should route direct (cheaper than through Jool LO). Same shape for Mun↔Minmus.
-4. **Algorithm swap.** Replace `path_dv`'s LCA walk with Dijkstra over `DvGraph`. Start node → goal node; edges weighted by `dv_m_s`. Return the same `list[Edge]` so `plan_trip` is untouched.
-5. **Regression guard.** All existing 7a/7b/7c/7d tests must still pass — the tree-only paths should still be cheapest when no shortcut is cheaper.
-6. **Also consider tackling** the deferred double-credit quirk on pre-baked capture edges (Eve 80, Duna 360, Kerbin 0) since the graph is being revisited anyway. Simplest fix: reclassify those as non-aerobrakable (the chart values already encode aerobrake), or add a per-edge `aerobrake_dv_m_s` override column.
+### Phase 7 closed
 
-**Acceptance gate:** `ksp dv laythe_low_orbit vall_low_orbit` picks the direct route (single edge with Laythe↔Vall Δv) instead of routing through `jool_low_orbit`.
-
-Files likely to change: `src/ksp_planner/dv_map.py` (Dijkstra algorithm), `seeds/seed_stock.py` (new adjacencies), plus tests. Dependency addition (e.g. `graphlib` stdlib or `networkx`) evaluated case-by-case — `heapq`-based Dijkstra is ~15 lines, probably fine without a library.
+Phase 7 ships as a complete Δv planner: tree + graph model, LCA-equivalent Dijkstra, five-leg plan formatting, per-stop actions (`land`/`orbit`/`flyby`), aerobrake-credit toggle, round-trip `--return`, and a margin multiplier. CLI surface is stable. Next up: **Phase 8 — Web UI + prod1 deploy (FastAPI + systemd + nginx)**. See [01-phases.md](01-phases.md) for the Phase 8 scope.
 
 ---
 
@@ -166,7 +167,7 @@ KSP App/
 │   ├── orbital.py                      period, vis-viva, escape, sync, hohmann, hill, Tsiolkovsky, TWR, interbody_hohmann
 │   ├── comms.py                        comm_network_report + primitives
 │   ├── plans.py                        save/load/list/delete
-│   ├── dv_map.py                       Δv tree + LCA path_dv + plan_trip + resolve_stop (Phase 7a/7b)
+│   ├── dv_map.py                       Δv graph + Dijkstra path_dv + plan_trip + plan_round_trip + resolve_stop (Phase 7a–7e)
 │   ├── formatting.py                   Rich tables, panels, fmt_dist, fmt_time, dv_trip_panel (with per-stop annotations)
 │   └── cli.py                          Typer app, entry point `ksp` (incl. `dv` with `--via body[:action]`)
 └── tests/
@@ -176,7 +177,7 @@ KSP App/
     ├── test_orbital.py                 18 tests — known values + hypothesis properties
     ├── test_comms.py                   16 tests — worked example + edge cases
     ├── test_plans.py                   13 tests — save/load/delete round-trip, update semantics, validation
-    ├── test_dv_map.py                  50 tests — hand-built tree LCA + load_dv_graph + Hohmann cross-check + resolver + 7b/7c/7d acceptance
+    ├── test_dv_map.py                  56 tests — hand-built tree + Dijkstra synthetic graphs + load_dv_graph + Hohmann cross-check + resolver + 7b/7c/7d/7e acceptance
     └── test_cli.py                     58 tests — all CLI subcommands incl. `plan {list,show,run,delete}` + `--save` + `dv` + `--via` + `--return`
 ```
 
@@ -191,10 +192,11 @@ KSP App/
 5. **Kerbol has NULL SOI, NULL orbit fields.** `parent_id IS NULL` is how we identify it. DB test `test_kerbol_has_no_orbit_or_soi` pins this.
 6. **Plans store inputs, not outputs** so formula changes propagate when a plan is reloaded and re-run.
 7. **Stdlib-only constraint from the docx is dropped** — dev and web deps are fine (memory: `project_deps_policy.md`).
-8. **Tree model for Phase 7 Δv planner** (seeded canonical chart values + flat 5% margin default). Graph upgrade is Phase 7e. *7a shipped 2026-04-21 — `dv_map.py` is pure (no DB import), DB loader lives in `db.py`.*
+8. **Graph model for Phase 7 Δv planner** (seeded canonical chart values + flat 5% margin default). Shipped 7a as strict tree + LCA walk; 7e generalised to Dijkstra shortest-path so non-tree edges can be added without algorithm changes. `dv_map.py` is pure (no DB import); DB loader lives in `db.py`.
 9. **Δv chart attribution** *(Phase 7a)*: Kerbin trunk between `kerbin_low_orbit` and `kerbol_orbit` is all 0 because LKO is the implicit baseline parking orbit for every "LKO → X" chart number. Ejection burns live on `(planet_transfer ↔ planet_capture)`; capture burns on `(planet_capture ↔ planet_LO)`. Trips from Kerbin match the chart exactly; trips originating elsewhere (e.g., Duna→Eve) are roughly correct but not chart-tuned — documented limitation, addressed in 7e graph upgrade.
 10. **`flyby` resolves to `_transfer`, not `_capture`** *(Phase 7b)*: the design-doc mapping `flyby → _capture` was self-contradictory — `_capture` is the state *after* the capture burn, which by definition isn't a flyby. `_transfer` (approach trajectory, no burn to stay) is consistent across planets and moons. Flyby is pure tree itinerary, not a gravity-assist model; the community chart doesn't encode slingshot savings.
-11. **`can_aerobrake` credits 100% of ballistic dv** *(Phase 7c → 7d)*: `AEROBRAKE_RESIDUAL_PCT = 0.0` (shipped 7c at 20%; flipped to 0% in 7d to match community-chart convention — chart values treat aerobrake descents as free). The 5% trip margin is the safety buffer for correction burns and imperfect passes. Constant kept as a module lever for future tuning. `total_raw` stays ballistic regardless of the flag — aerobrake only affects `total_aerobraked` and `total_aerobraked_planned`. Known quirk: the three pre-baked capture edges (Eve 80, Duna 360, Kerbin 0) are double-credited — at 0% residual these round to ~0 so the error band collapses to at most 80 m/s across an Eve+Duna outbound, but the data-model inaccuracy (chart-baked values flagged as `can_aerobrake=True`) still stands; fix deferred to 7e.
+11. **`can_aerobrake` credits 100% of ballistic dv** *(Phase 7c → 7d → 7e)*: `AEROBRAKE_RESIDUAL_PCT = 0.0` (shipped 7c at 20%; flipped to 0% in 7d to match community-chart convention — chart values treat aerobrake descents as free). The 5% trip margin is the safety buffer for correction burns and imperfect passes. Constant kept as a module lever for future tuning. `total_raw` stays ballistic regardless of the flag — aerobrake only affects `total_aerobraked` and `total_aerobraked_planned`. *7e fix:* the three pre-baked capture edges (Eve 80, Duna 360, Kerbin 0) now carry `can_aerobrake=False` — their chart values already encode aerobrake, so crediting them again was double-counting. Only real aerobraking venues (Eve 8000 descent, Duna 1450 descent, Kerbin 3400 descent) keep the credit.
+12. **Phase 7e scope redirection** *(2026-04-23)*: the original 7e plan called for inter-moon shortcut edges (Laythe↔Vall, Mun↔Minmus, etc.). Research confirmed the canonical community subway chart publishes zero such edges. Per the "don't invent values" project rule, no shortcuts were seeded. 7e shipped the algorithm generalisation (Dijkstra) and the double-credit fix instead. Future shortcut edges would need a second numerical source (e.g. KSPTOT-derived) with distinct provenance; the graph now accommodates them without another algorithm swap.
 
 ---
 
@@ -203,7 +205,7 @@ KSP App/
 ```bash
 make install     # uv sync --group dev
 make seed        # regenerate ksp.db from KSPTOT + inline antenna/DSN tables
-make test        # pytest (all 127 tests)
+make test        # pytest (207 tests)
 make lint        # ruff check
 
 uv run ksp body kerbin

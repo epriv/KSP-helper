@@ -57,6 +57,8 @@ Before Phase 1 seeding, every value from the original planning `.docx` was cross
 
 We seed these canonical values directly — see [docs/features/dv-planner.md](features/dv-planner.md) for the rationale. A cross-check test computes Hohmann Δv from `orbital.py` and fails if the result diverges from the seeded chart value by more than 5%.
 
+**No chart-sourced shortcut edges.** Phase 7e confirmed (SVG audit of Kowgan / Cuky's canonical community subway chart, cross-checked against the KSP forum thread and the SpaceDock mod page) that the community chart publishes **zero** direct inter-moon or cross-branch edges. Every numeric label on the chart corresponds to a parent-child tree edge already in the seed. Any future Laythe↔Vall, Mun↔Minmus, etc. shortcut would require a second numerical source (e.g. KSPTOT / alexmoon Hohmann calculator output) with its own provenance — the Δv planner uses Dijkstra as of 7e, so adding shortcut edges is an adjacency-list change, not an algorithm change.
+
 ## What does NOT exist
 
 - **No ready-made SQLite dump.** Nobody has published a KSP bodies DB; we build our own from KSPTOT.

@@ -124,13 +124,14 @@ Each sub-phase ships on its own, gated by its acceptance test.
 
 **Done when:** given a canned Mun lander stage sheet, the planner confirms it reaches Mun surface and back.
 
-### 7e — Graph upgrade *(optional)*
+### 7e — Graph upgrade ✅ *(shipped 2026-04-23)*
 
-- Swap tree walk for Dijkstra
-- Add inter-moon edges (Laythe → Vall, Mun → Minmus) with canonical values where the community has them
-- Public API (`path_dv`, `plan_trip`) unchanged — callers don't care
+- Swapped LCA tree walk for Dijkstra shortest-path over `DvGraph`; public API (`path_dv`, `plan_trip`, `plan_round_trip`) unchanged. Stdlib `heapq` — no new dep.
+- `DvGraph.neighbors_of(slug)` added for O(deg(u)) neighbor iteration; adjacency list built at init. Private `_ancestors` / `_lowest_common_ancestor` helpers removed.
+- **No chart-sourced shortcut edges.** Research confirmed the Cuky community chart publishes zero direct inter-moon values (see [docs/02-data-sources.md](../02-data-sources.md)). Tree topology is complete. Future shortcut edges require a second numerical source; deferred.
+- Fixed the 7c-era double-credit on pre-baked capture edges: `eve_capture → eve_low_orbit` (80), `duna_capture → duna_low_orbit` (360), and `kerbin_capture → kerbin_low_orbit` (0) reclassified `can_aerobrake=False`. Chart values already encode aerobrake; credit was previously applied twice under `aerobrake=True`.
 
-**Done when:** `ksp dv laythe_low_orbit vall_low_orbit` picks the direct route instead of going through Jool orbit.
+**Done when:** all existing tests pass under Dijkstra (tree-equivalence guarantee); `kerbin_surface → duna_surface` aerobraked shifts 4,460 → 4,820 (only Duna descent credits); synthetic `test_dijkstra_picks_cheapest_edge_when_shortcut_exists` passes on a graph with a non-tree shortcut edge.
 
 ## Example output (7b)
 
