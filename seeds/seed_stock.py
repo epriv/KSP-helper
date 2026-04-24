@@ -156,7 +156,7 @@ DV_ADJACENCIES: list[tuple[str, str, float, float, bool]] = [
     # Kerbin trunk — all zero (LKO is the chart's baseline parking orbit)
     ("kerbol_orbit",     "kerbin_transfer",  0,    0,    False),
     ("kerbin_transfer",  "kerbin_capture",   0,    0,    False),
-    ("kerbin_capture",   "kerbin_low_orbit", 0,    0,    True),   # aerobrake re-entry
+    ("kerbin_capture",   "kerbin_low_orbit", 0,    0,    False),  # 7e: pre-baked aerocapture
     ("kerbin_low_orbit", "kerbin_surface",   3400, 3400, True),   # asc 3400, desc 0 w/ aero
 
     # Mun (no capture node — capture burn folded into transfer→LO edge)
@@ -178,7 +178,7 @@ DV_ADJACENCIES: list[tuple[str, str, float, float, bool]] = [
     # Eve
     ("kerbol_orbit",     "eve_transfer",     0,    0,    False),
     ("eve_transfer",     "eve_capture",      1080, 1080, False),
-    ("eve_capture",      "eve_low_orbit",    80,   80,   True),   # Eve aerobrake nearly free
+    ("eve_capture",      "eve_low_orbit",    80,   80,   False),  # 7e: pre-baked aerocapture
     ("eve_low_orbit",    "eve_surface",      8000, 8000, True),   # brutal asc, aerobrake desc
     # Gilly (under Eve LO; no capture cost effectively)
     ("eve_low_orbit",    "gilly_transfer",   60,   60,   False),
@@ -189,7 +189,7 @@ DV_ADJACENCIES: list[tuple[str, str, float, float, bool]] = [
     # Duna
     ("kerbol_orbit",     "duna_transfer",    0,    0,    False),
     ("duna_transfer",    "duna_capture",     1060, 1060, False),
-    ("duna_capture",     "duna_low_orbit",   360,  360,  True),   # Duna aerobrake helps capture
+    ("duna_capture",     "duna_low_orbit",   360,  360,  False),  # 7e: pre-baked aerocapture
     ("duna_low_orbit",   "duna_surface",     1450, 1450, True),   # Duna descent aerobrake → ~250
     # Ike
     ("duna_low_orbit",   "ike_transfer",     30,   30,   False),

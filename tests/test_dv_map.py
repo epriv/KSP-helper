@@ -294,14 +294,52 @@ def test_seeded_path_within_30pct_of_hohmann(db, planet_slug):
     )
 
 
-def test_eve_capture_claims_aerobrake_credit(db):
-    """Eve's tiny chart capture (~80 m/s) only makes sense with aerobrake."""
+def test_eve_capture_is_not_aerobrake_credited(db):
+    """Eve's chart capture (~80 m/s) ALREADY encodes aerobrake — flag must be False.
+
+    The 80 m/s chart value is the aerobraked version; leaving can_aerobrake=True
+    would double-credit it under aerobrake=True. Fix shipped in 7e.
+    """
     from ksp_planner.db import load_dv_graph
 
     g = load_dv_graph(db)
     edge = g.edge("eve_capture", "eve_low_orbit")
-    assert edge.can_aerobrake, "Eve insertion needs can_aerobrake=True for the chart value"
-    assert edge.dv_m_s < 200, f"chart Eve capture ~80 m/s w/ aerobrake, got {edge.dv_m_s}"
+    assert not edge.can_aerobrake, (
+        "eve_capture→eve_low_orbit is a pre-baked chart value; "
+        "can_aerobrake must be False to avoid double-credit"
+    )
+    assert edge.dv_m_s < 200, f"chart Eve capture ~80 m/s, got {edge.dv_m_s}"
+
+
+def test_duna_capture_is_not_aerobrake_credited(db):
+    """Duna's chart capture (360 m/s) is pre-baked aerobraked — flag must be False."""
+    from ksp_planner.db import load_dv_graph
+
+    g = load_dv_graph(db)
+    edge = g.edge("duna_capture", "duna_low_orbit")
+    assert not edge.can_aerobrake, (
+        "duna_capture→duna_low_orbit is a pre-baked chart value; "
+        "can_aerobrake must be False to avoid double-credit"
+    )
+    assert 300 < edge.dv_m_s < 400
+
+
+def test_kerbin_capture_is_not_aerobrake_credited(db):
+    """Kerbin's interplanetary-return capture (0 m/s) is pre-baked aerocapture.
+
+    Zero-value edge so arithmetic is unchanged, but the flag must be False for
+    consistency with the Eve / Duna siblings — the chart already models
+    aerocapture as free.
+    """
+    from ksp_planner.db import load_dv_graph
+
+    g = load_dv_graph(db)
+    edge = g.edge("kerbin_capture", "kerbin_low_orbit")
+    assert not edge.can_aerobrake, (
+        "kerbin_capture→kerbin_low_orbit is a pre-baked 0 m/s chart value; "
+        "can_aerobrake must be False for consistency with Eve/Duna siblings"
+    )
+    assert edge.dv_m_s == 0
 
 
 # ---------- resolve_stop ----------
@@ -409,14 +447,18 @@ def test_kerbin_via_minmus_orbit_to_mun_surface_acceptance(db):
 
 
 def test_kerbin_to_duna_surface_aerobraked_totals(db):
-    """kerbin→duna: raw 6,270; aerobraked 4,460 (duna capture 360→0, duna descent 1450→0)."""
+    """kerbin→duna: raw 6,270; aerobraked 4,820 (only duna descent 1450→0 credits).
+
+    7e: duna_capture→duna_low_orbit (360) reclassified can_aerobrake=False — its
+    chart value already encodes aerobrake, so it stays full under aerobrake=True.
+    """
     from ksp_planner.db import load_dv_graph
 
     g = load_dv_graph(db)
     plan = plan_trip(g, [Stop("kerbin_surface"), Stop("duna_surface")])
     assert plan.total_raw == pytest.approx(6270, abs=5)
-    assert plan.total_aerobraked == pytest.approx(4460, abs=5)
-    assert plan.total_aerobraked_planned == pytest.approx(4460 * 1.05, abs=10)
+    assert plan.total_aerobraked == pytest.approx(4820, abs=5)
+    assert plan.total_aerobraked_planned == pytest.approx(4820 * 1.05, abs=10)
     assert plan.aerobrake is True
 
 
@@ -431,17 +473,21 @@ def test_kerbin_to_mun_surface_aerobrake_is_noop(db):
 
 
 def test_kerbin_to_eve_surface_aerobraked_shows_dramatic_savings(db):
-    """Eve descent (8000 ballistic) + Eve capture (80) both zeroed at 0% residual."""
+    """Eve descent (8000 ballistic) zeroed; Eve capture (80) stays full.
+
+    7e: eve_capture→eve_low_orbit reclassified can_aerobrake=False (chart value
+    already encodes aerobrake). Only the 8000 m/s Eve descent credits.
+    """
     from ksp_planner.db import load_dv_graph
 
     g = load_dv_graph(db)
     plan = plan_trip(g, [Stop("kerbin_surface"), Stop("eve_surface")])
     # Outbound: 3400 (ascent, up — not aerobrakable) + 0 (trunk) + 1080 (Eve ejection)
-    #           + 80 (Eve capture) + 8000 (Eve descent) = 12,560
-    # With aerobrake: 3400 + 0 + 1080 + 0 + 0 = 4,480
+    #           + 80 (Eve capture, pre-baked) + 8000 (Eve descent) = 12,560
+    # With aerobrake: 3400 + 0 + 1080 + 80 + 0 = 4,560
     assert plan.total_raw == pytest.approx(12560, abs=10)
-    assert plan.total_aerobraked == pytest.approx(4480, abs=10)
-    assert plan.total_raw - plan.total_aerobraked > 8000
+    assert plan.total_aerobraked == pytest.approx(4560, abs=10)
+    assert plan.total_raw - plan.total_aerobraked == pytest.approx(8000, abs=10)
 
 
 # ---------- 7d: round-trip ----------

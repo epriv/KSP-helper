@@ -481,9 +481,9 @@ def test_dv_kerbin_to_duna_shows_with_aerobrake_row(seed_db):
     assert r.exit_code == 0, r.stdout
     assert "Raw total" in r.stdout
     assert "With aerobrake" in r.stdout
-    # raw 6,270; aerobraked 4,460; planned aerobraked 4,683
+    # 7e: raw 6,270; aerobraked 4,820 (duna_capture reclassified — only descent credits)
     assert "6,270" in r.stdout
-    assert "4,460" in r.stdout
+    assert "4,820" in r.stdout
 
 
 def test_dv_aerobrake_column_marks_credited_edges(seed_db):
