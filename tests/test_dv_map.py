@@ -294,52 +294,29 @@ def test_seeded_path_within_30pct_of_hohmann(db, planet_slug):
     )
 
 
-def test_eve_capture_is_not_aerobrake_credited(db):
-    """Eve's chart capture (~80 m/s) ALREADY encodes aerobrake — flag must be False.
+@pytest.mark.parametrize(
+    "body, dv_min, dv_max",
+    [("eve", 0, 200), ("duna", 300, 400), ("kerbin", 0, 0)],
+    ids=["eve_80", "duna_360", "kerbin_0"],
+)
+def test_pre_baked_capture_edge_is_not_aerobrake_credited(db, body, dv_min, dv_max):
+    """Eve/Duna/Kerbin capture→LO chart values already encode aerobrake.
 
-    The 80 m/s chart value is the aerobraked version; leaving can_aerobrake=True
-    would double-credit it under aerobrake=True. Fix shipped in 7e.
+    7e: flag must be False on all three; crediting them under aerobrake=True
+    would double-count. Only the real aerobraking venues (descent edges) keep
+    can_aerobrake=True.
     """
     from ksp_planner.db import load_dv_graph
 
     g = load_dv_graph(db)
-    edge = g.edge("eve_capture", "eve_low_orbit")
+    edge = g.edge(f"{body}_capture", f"{body}_low_orbit")
     assert not edge.can_aerobrake, (
-        "eve_capture→eve_low_orbit is a pre-baked chart value; "
+        f"{body}_capture→{body}_low_orbit is a pre-baked chart value; "
         "can_aerobrake must be False to avoid double-credit"
     )
-    assert edge.dv_m_s < 200, f"chart Eve capture ~80 m/s, got {edge.dv_m_s}"
-
-
-def test_duna_capture_is_not_aerobrake_credited(db):
-    """Duna's chart capture (360 m/s) is pre-baked aerobraked — flag must be False."""
-    from ksp_planner.db import load_dv_graph
-
-    g = load_dv_graph(db)
-    edge = g.edge("duna_capture", "duna_low_orbit")
-    assert not edge.can_aerobrake, (
-        "duna_capture→duna_low_orbit is a pre-baked chart value; "
-        "can_aerobrake must be False to avoid double-credit"
+    assert dv_min <= edge.dv_m_s <= dv_max, (
+        f"expected {dv_min}..{dv_max} m/s, got {edge.dv_m_s}"
     )
-    assert 300 < edge.dv_m_s < 400
-
-
-def test_kerbin_capture_is_not_aerobrake_credited(db):
-    """Kerbin's interplanetary-return capture (0 m/s) is pre-baked aerocapture.
-
-    Zero-value edge so arithmetic is unchanged, but the flag must be False for
-    consistency with the Eve / Duna siblings — the chart already models
-    aerocapture as free.
-    """
-    from ksp_planner.db import load_dv_graph
-
-    g = load_dv_graph(db)
-    edge = g.edge("kerbin_capture", "kerbin_low_orbit")
-    assert not edge.can_aerobrake, (
-        "kerbin_capture→kerbin_low_orbit is a pre-baked 0 m/s chart value; "
-        "can_aerobrake must be False for consistency with Eve/Duna siblings"
-    )
-    assert edge.dv_m_s == 0
 
 
 # ---------- resolve_stop ----------

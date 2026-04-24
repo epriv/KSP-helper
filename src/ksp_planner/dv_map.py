@@ -94,10 +94,9 @@ def path_dv(graph: DvGraph, from_slug: str, to_slug: str) -> list[Edge]:
     Raises KeyError if either slug is unknown; ValueError if no path exists.
     Returns `[]` when `from_slug == to_slug`.
     """
-    if from_slug == to_slug:
-        graph.node(from_slug)
-        return []
     graph.node(from_slug)
+    if from_slug == to_slug:
+        return []
     graph.node(to_slug)
 
     dist: dict[str, float] = {from_slug: 0.0}
