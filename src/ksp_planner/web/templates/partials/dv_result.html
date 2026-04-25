@@ -1,0 +1,62 @@
+{# Δv planner result partial. Rendered inside #result on POST /dv. #}
+
+<div class="ksp-totals">
+  {# Primary: best total (aerobraked if applicable, else raw) #}
+  {% if response.aerobrake and response.total_aerobraked < response.total_raw - 0.5 %}
+    <div class="ksp-total is-primary">
+      <div class="ksp-total-label">Aerobraked</div>
+      <div class="ksp-total-value">{{ "{:,.0f}".format(response.total_aerobraked) }} m/s</div>
+    </div>
+  {% else %}
+    <div class="ksp-total is-primary">
+      <div class="ksp-total-label">Raw Δv</div>
+      <div class="ksp-total-value">{{ "{:,.0f}".format(response.total_raw) }} m/s</div>
+    </div>
+  {% endif %}
+
+  {# Gold: planned (with margin) #}
+  <div class="ksp-total is-accent-gold">
+    <div class="ksp-total-label">+{{ "%g"|format(response.margin_pct) }}% margin</div>
+    <div class="ksp-total-value">
+      {% if response.aerobrake and response.total_aerobraked < response.total_raw - 0.5 %}
+        {{ "{:,.0f}".format(response.total_aerobraked_planned) }} m/s
+      {% else %}
+        {{ "{:,.0f}".format(response.total_planned) }} m/s
+      {% endif %}
+    </div>
+  </div>
+
+  {# Muted: ballistic / raw #}
+  {% if response.aerobrake and response.total_aerobraked < response.total_raw - 0.5 %}
+    <div class="ksp-total is-muted">
+      <div class="ksp-total-label">Ballistic</div>
+      <div class="ksp-total-value">{{ "{:,.0f}".format(response.total_raw) }} m/s</div>
+    </div>
+  {% endif %}
+</div>
+
+{# Leg list - flat legs with stop annotations inserted by after_leg_idx #}
+{% set stops_by_idx = {} %}
+{% for s in response.stops %}{% if stops_by_idx.update({s.after_leg_idx: s}) %}{% endif %}{% endfor %}
+
+<div class="ksp-legs">
+  {% for leg in response.legs %}
+    <div class="ksp-leg {% if response.aerobrake and leg.can_aerobrake %}is-aero{% endif %}">
+      <div class="ksp-leg-from">{{ leg.from_slug }}</div>
+      <div class="ksp-leg-arrow">→</div>
+      <div class="ksp-leg-to">{{ leg.to_slug }}</div>
+      <div class="ksp-leg-dv">{{ "{:,.0f}".format(leg.dv_m_s) }} m/s</div>
+      <div class="ksp-leg-aero">{% if leg.can_aerobrake %}{% if response.aerobrake %}✓ −100%{% else %}✓ off{% endif %}{% endif %}</div>
+    </div>
+    {% if loop.index0 in stops_by_idx %}
+      {% set stop = stops_by_idx[loop.index0] %}
+      <div class="ksp-leg-stop">── stop: {{ stop.action }} at {{ stop.slug }} ──</div>
+    {% endif %}
+  {% endfor %}
+</div>
+
+{# CLI hint #}
+<div class="ksp-cli">
+  <span class="ksp-cli-prompt">$</span>
+  <code>{{ response.equivalent_cli }}</code>
+</div>
