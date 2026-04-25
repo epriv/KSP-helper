@@ -1,7 +1,5 @@
-# Phase 8 — Web UI design (DRAFT)
+# Phase 8 — Web UI design
 
-> **Status: brainstorm in progress.** Two questions are still open (see *Open questions* at the bottom). This document is being committed mid-brainstorm so the state is portable across machines. When the open questions land, the DRAFT banner comes off and the doc is finalised in place.
->
 > **Last updated:** 2026-04-24
 
 ---
@@ -228,7 +226,7 @@ These reuse the exact Phase 7d canonical numbers — the web layer is verifiably
 
 ## Testing approach
 
-> **Q3 answer (user):** TDD, FastAPI `TestClient`.
+TDD throughout, using FastAPI `TestClient` (which is httpx under the hood). Same RED→GREEN cadence as Phases 1–7.
 
 - One test file per sub-phase: `tests/test_web_dv.py`, `tests/test_web_comms.py`, etc.
 - Shared `app` fixture in `conftest.py` overrides `deps.get_db()` to the session-scoped seeded DB.
@@ -246,7 +244,7 @@ These reuse the exact Phase 7d canonical numbers — the web layer is verifiably
 
 ## Deploy story
 
-> **Q4 answer (user):** prod1 = Ubuntu LXC on homelab. Domain via Cloudflare A record (TBD). Want **portability**: app must run locally on any machine, homelab is one hosting target among many.
+The eventual host (`prod1`) is an Ubuntu LXC container on the user's homelab. A Cloudflare A record will point `ksp.<domain>` at it once 8f ships. The non-negotiable design constraint is **portability** — the app must run locally on *any* machine; the homelab is one hosting target among many, not a special case in the code.
 
 ### Portability principle (drives 8f design)
 
@@ -295,32 +293,3 @@ httpx >= 0.27                 # TestClient (dev group only)
 ```
 
 No npm. `htmx.min.js` vendored.
-
----
-
-## Open questions
-
-These two are unanswered and block finalising this draft. Resume from here on the next session.
-
-### Q1 — Ladder revision
-
-The 6-sub-phase ladder above (8a hero / 8b deploy-calc + comms / 8c plans / 8d trio / 8e refs / 8f deploy). User did not explicitly approve or push back at the time of this checkpoint. **Currently assumed approved**; correct on resume if any item should be reordered, split further, or dropped.
-
-### Q2 — `/comms` page layout
-
-- **A.** One page — network coverage report and resonant-deploy plan chained on a single workflow.
-- **B.** Two pages — separate `/comms` and `/deploy`.
-
-**Currently assumed A.** They chain naturally ("what altitude do I need?" → "how do I get N sats there in one launch?"). Override-altitude input is just a number — deploy-only use is still possible. Will revisit if user prefers split.
-
----
-
-## Next steps (when resumed)
-
-1. Lock in Q1 (ladder) and Q2 (`/comms` layout). Remove this section once both are settled.
-2. Optional: revisit aesthetic palette (the "harsh" follow-up) — one-file edit to `theme.css`.
-3. Remove the **DRAFT** banner.
-4. Run spec self-review (placeholders, internal consistency, scope, ambiguity).
-5. Ask user to review the finalised spec.
-6. Invoke `superpowers:writing-plans` skill to produce the **8a-only** implementation plan at `docs/superpowers/plans/2026-04-24-phase-8a.md`.
-7. Begin RED-GREEN TDD for 8a.
