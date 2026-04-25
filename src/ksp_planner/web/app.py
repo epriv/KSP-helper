@@ -6,18 +6,34 @@ import os
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 
 _HERE = Path(__file__).parent
 _STATIC = _HERE / "static"
+_TEMPLATES = _HERE / "templates"
 
-app = FastAPI(title="KSP Planner", version="0.8.0a")
+VERSION = "0.8.0a"
+
+app = FastAPI(title="KSP Planner", version=VERSION)
 app.mount("/static", StaticFiles(directory=_STATIC), name="static")
+
+templates = Jinja2Templates(directory=_TEMPLATES)
+
+from ksp_planner.web.routes import dv as dv_routes  # noqa: E402
+
+app.include_router(dv_routes.router)
 
 
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/")
+def root() -> RedirectResponse:
+    return RedirectResponse(url="/dv")
 
 
 def serve() -> None:

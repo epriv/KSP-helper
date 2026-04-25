@@ -1,0 +1,23 @@
+{% macro body_select(name, bodies, selected="kerbin") %}
+<select class="ksp-select" name="{{ name }}">
+  {% set systems = [("sun", "Sun"), ("inner", "Inner planets"), ("home", "Kerbin system"), ("outer", "Outer planets"), ("jool", "Jool system"), ("far", "Far")] %}
+  {% for sys_key, sys_label in systems %}
+    {% set group = bodies | selectattr("system", "equalto", sys_key) | list %}
+    {% if group %}
+      <optgroup label="{{ sys_label }}">
+        {% for b in group %}
+          <option value="{{ b.slug }}" {% if b.slug == selected %}selected{% endif %}>{{ b.name }}</option>
+        {% endfor %}
+      </optgroup>
+    {% endif %}
+  {% endfor %}
+</select>
+{% endmacro %}
+
+{% macro action_select(name, selected="land") %}
+<select class="ksp-select ksp-select-narrow" name="{{ name }}">
+  <option value="land"  {% if selected == "land"  %}selected{% endif %}>Surface</option>
+  <option value="orbit" {% if selected == "orbit" %}selected{% endif %}>Low orbit</option>
+  <option value="flyby" {% if selected == "flyby" %}selected{% endif %}>Transfer</option>
+</select>
+{% endmacro %}
