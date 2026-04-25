@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% from "macros/forms.html" import body_select, action_select %}
+{% from "macros/panels.html" import error_flash, empty_state %}
+
+{% block title %}Δv Trip Planner — KSP Planner{% endblock %}
+
+{% block content %}
+<div class="wb-grid-dv">
+
+  {# ── Planner panel ── #}
+  <div class="ksp-panel">
+    <div class="ksp-panel-header">
+      <div class="ksp-panel-eyebrow">Δv Planner</div>
+      <h2 class="ksp-panel-title">Trip Plan</h2>
+    </div>
+
+    {% if error %}{{ error_flash(error) }}{% endif %}
+
+    <form method="post" action="/dv"
+          hx-post="/dv" hx-target="#result" hx-swap="innerHTML" hx-push-url="true">
+
+      {# FROM / TO #}
+      <div class="ksp-stop-row">
+        <div class="ksp-stop">
+          <div class="ksp-stop-label">FROM</div>
+          {{ body_select("from_body", bodies, selected=(form.from_body if form else "kerbin")) }}
+          {{ action_select("from_action", selected=(form.from_action if form else "land")) }}
+        </div>
+        <div class="ksp-stop-arrow">→</div>
+        <div class="ksp-stop">
+          <div class="ksp-stop-label">TO</div>
+          {{ body_select("to_body", bodies, selected=(form.to_body if form else "mun")) }}
+          {{ action_select("to_action", selected=(form.to_action if form else "land")) }}
+        </div>
+      </div>
+
+      {# VIA stops #}
+      <div id="via-stops">
+        {% if form and form.via %}
+          {% for stop in form.via %}
+            <div class="ksp-via-row">
+              <span class="ksp-via-tag">VIA</span>
+              {{ body_select("via_body", bodies, selected=stop.body) }}
+              {{ action_select("via_action", selected=stop.action) }}
+              <button class="ksp-icon-btn" type="button" onclick="this.parentElement.remove()">×</button>
+            </div>
+          {% endfor %}
+        {% endif %}
+      </div>
+
+      {# Controls #}
+      <div class="ksp-controls">
+        <button type="button" class="ksp-btn-ghost"
+                hx-get="/dv/stop-row" hx-target="#via-stops" hx-swap="beforeend">+ Add stop</button>
+        <label class="ksp-toggle">
+          <input type="checkbox" name="aerobrake" {% if not form or form.aerobrake %}checked{% endif %}> <span>Aerobrake</span>
+        </label>
+        <label class="ksp-toggle">
+          <input type="checkbox" name="round_trip" {% if form and form.round_trip %}checked{% endif %}> <span>Round-trip</span>
+        </label>
+        <label class="ksp-margin">
+          <span>Margin</span>
+          <input class="ksp-input" type="number" name="margin_pct" min="0" max="100"
+                 value="{{ form.margin_pct if form else 5 }}">
+          <span class="ksp-suffix">%</span>
+        </label>
+        <button class="btn-primary" type="submit">Plan trip →</button>
+      </div>
+    </form>
+
+    {# Result area (swapped by HTMX) #}
+    <div id="result">
+      {% if response %}
+        {% include "partials/dv_result.html" %}
+      {% else %}
+        {{ empty_state() }}
+      {% endif %}
+    </div>
+  </div>
+
+  {# ── Subway map reference ── #}
+  {% if subway_rows %}
+  <div class="ksp-panel">
+    <div class="ksp-panel-header">
+      <div class="ksp-panel-eyebrow">Reference</div>
+      <h2 class="ksp-panel-title">Δv Map</h2>
+    </div>
+    <div class="wb-subway-grid">
+      <div class="wb-subway-head"></div>
+      {% for col in ["Tx", "Cap", "LO", "Sfc"] %}
+        <div class="wb-subway-head">{{ col }}</div>
+      {% endfor %}
+      {% for row in subway_rows %}
+        <div class="wb-subway-rowhead">{{ row.system }}</div>
+        {% for cell in row.cells %}
+          <div class="wb-subway-cell">
+            {% for node in cell %}
+              <span class="wb-node" title="{{ node.slug }}">{{ node.label }}</span>
+            {% endfor %}
+          </div>
+        {% endfor %}
+      {% endfor %}
+    </div>
+    <div class="wb-subway-legend">Tx = transfer · Cap = capture · LO = low orbit · Sfc = surface</div>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}
