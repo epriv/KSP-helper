@@ -1,0 +1,50 @@
+/* Phase 8a — design tokens. Single source of truth for palette + typography. */
+
+:root {
+  /* palette */
+  --color-bg:          #0c1020;
+  --color-surface:     #0e1530;
+  --color-surface-alt: #080c1a;
+  --color-border:      rgba(142, 212, 168, 0.18);
+  --color-border-alt:  rgba(142, 212, 168, 0.30);
+  --color-accent:      #8ed4a8;
+  --color-text:        #e7ecf3;
+  --color-text-muted:  #8a94a6;
+  --color-text-dim:    #5a6880;
+  --color-error:       #f08a8a;
+
+  /* typography */
+  --font-serif: "IBM Plex Serif", Georgia, serif;
+  --font-mono:  "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-sans:  -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+
+  /* spacing — 4px grid */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* radius */
+  --radius-sm: 3px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+* { box-sizing: border-box; }
+
+a { color: var(--color-accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+code, pre { font-family: var(--font-mono); }

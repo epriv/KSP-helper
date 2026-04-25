@@ -3,10 +3,16 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+
+_HERE = Path(__file__).parent
+_STATIC = _HERE / "static"
 
 app = FastAPI(title="KSP Planner", version="0.8.0a")
+app.mount("/static", StaticFiles(directory=_STATIC), name="static")
 
 
 @app.get("/health")
