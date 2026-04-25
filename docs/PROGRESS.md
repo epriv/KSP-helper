@@ -2,8 +2,8 @@
 
 > Resumable status snapshot. Paired with [01-phases.md](01-phases.md) (the plan) and [02-data-sources.md](02-data-sources.md) (the data provenance).
 
-**Last updated:** 2026-04-23
-**Tests:** 207 passing · **Lint:** clean · **Coverage:** 96% overall, 100% on `orbital.py` and `db.py`.
+**Last updated:** 2026-04-25
+**Tests:** 235 passing · **Lint:** clean · **Coverage:** 96% overall, 100% on `orbital.py` and `db.py`.
 
 ---
 
@@ -19,7 +19,7 @@
 | 5 | Hohmann / TWR / Tsiolkovsky | ✅ done | Kerbin→Duna matches canonical 1060 m/s ejection |
 | 6 | Mission plan persistence | ✅ done | All four calculators support `--save NAME`; `ksp plan {list,show,run,delete}` covers round-trip |
 | 7 | Δv planner (Dijkstra graph, margin, stops, round-trip) | ✅ done | Shipped 7a–7e; design locked in [features/dv-planner.md](features/dv-planner.md); sub-phase ladder below |
-| 8 | Web UI + prod1 deploy (FastAPI + systemd + nginx) | ⬜ not started | |
+| 8 | Web UI + prod1 deploy (FastAPI + systemd + nginx) | 🔄 in progress | 8a done — `/dv` page live at CLI parity; 8b next (comm-net page) |
 | 9 | Mod packs / KSP2 seeds | ⬜ not started | |
 
 ### Phase 6 completion log
@@ -134,6 +134,52 @@ Shipped with TDD throughout. 6 net new tests (4 Dijkstra synthetic + 3 parametri
 
 Phase 7 ships as a complete Δv planner: tree + graph model, LCA-equivalent Dijkstra, five-leg plan formatting, per-stop actions (`land`/`orbit`/`flyby`), aerobrake-credit toggle, round-trip `--return`, and a margin multiplier. CLI surface is stable. Next up: **Phase 8 — Web UI + prod1 deploy (FastAPI + systemd + nginx)**. See [01-phases.md](01-phases.md) for the Phase 8 scope.
 
+### Phase 8a completion log
+
+Shipped with TDD throughout. 28 new tests; 207 → 235 total. Lint clean. Design from Claude Design session 2026-04-25 — "Engineer's Workbench" aesthetic adopted verbatim.
+
+- **FastAPI skeleton.** `src/ksp_planner/web/app.py`: `serve()` reads `KSP_HOST`/`KSP_PORT`/`KSP_RELOAD` env vars and delegates to `uvicorn.run`; `StaticFiles` mount at `/static`; `GET /` redirects to `/dv`; Jinja2Templates at `web/templates/`; router for `routes.dv`.
+- **Schema layer.** `src/ksp_planner/web/schemas.py`: `DvRequest` (Pydantic; `from_stop`, `to_stop`, `via_stops`, `round_trip`, `aerobrake`, `margin_pct`); `DvResponse.from_trip()` adapter (flat legs, slug-based) for JSON API; `_FormState` namespace preserving raw body+action values for template repopulation.
+- **Deps.** `src/ksp_planner/web/deps.py`: `get_conn()` FastAPI dependency yields a read-only DB connection.
+- **`/dv` route.** `src/ksp_planner/web/routes/dv.py`:
+  - `_ctx(**extra)` builds base template context (`active_nav`, `version`, `bodies`, `subway_rows`).
+  - `_subway_rows(conn)` groups dv_map nodes into a system × state grid for the sidebar.
+  - `DV_BODIES` list of 17 bodies with slug/name/system for grouped `<select>` options.
+  - `GET /dv` — accepts optional `from_body`, `from_action`, `to_body`, `to_action`, etc. as query params; computes trip when both endpoints present (shareable URLs).
+  - `POST /dv` — converts body+action pairs to slugs via `resolve_stop`; handles `ValidationError`/`KeyError`/`ValueError` as 400 with flash; branches on `HX-Request` header (HTMX partial), `Accept: application/json` (JSON), or full-page Jinja render. `hx-push-url="true"` makes every POST result a shareable GET URL.
+  - `GET /dv/stop-row` — returns a via-stop partial for HTMX injection (add/remove via stops).
+- **Design tokens.** `static/css/theme.css` fully rewritten to "Engineer's Workbench" palette: `--bg #0a0e0f`, `--accent #6ee7b7` (mint), fonts Inter Tight / JetBrains Mono / Source Serif 4. Naming scheme `--bg`, `--accent`, `--surface`, `--line`, `--text-*` (matches the Claude Design session CSS vars exactly).
+- **Component library.** `static/css/components.css` fully rewritten with workbench classes: `.wb-top`/`.wb-chip`/`.wb-grid-dv`; `.ksp-panel`/`.ksp-legs`/`.ksp-leg`; `.ksp-stop-row`/`.ksp-select`/`.ksp-toggle`/`.ksp-margin`; `.ksp-total` 3-box layout (primary mint, gold, muted ballistic); `.wb-subway-grid` sidebar.
+- **Templates.**
+  - `templates/base.html`: workbench shell with 2×2 brand mark, chip nav, meta strip.
+  - `templates/macros/forms.html`: `body_select` macro with `<optgroup>` by system; `action_select` (land/orbit/flyby).
+  - `templates/macros/panels.html`: `error_flash`, `empty_state`.
+  - `templates/pages/dv.html`: full planner page — FROM/TO body+action selects, `#via-stops` HTMX target, controls row (add stop, round-trip toggle, aerobrake toggle, margin input, submit), `#result` HTMX target, subway sidebar.
+  - `templates/partials/dv_result.html`: 3-box totals, flat leg list (Jinja2 `stops_by_idx.update()` trick for stop annotations between legs), CLI hint.
+  - `templates/partials/stop_row.html`: via-stop row with VIA tag, body+action selects, remove button.
+  - `templates/partials/error_flash.html`: thin error wrapper for HTMX swaps.
+- **Tests.** `test_web_smoke.py` (7 tests: health, serve, htmx.js, theme.css tokens, components.css, root redirect, env-var forwarding); `test_web_schemas.py` (DvRequest/DvResponse schema tests); `test_web_dv.py` (10 tests: form rendered, body options, canonical numbers 10,300/6,900/7,245, HTMX partial, JSON response, stop-row partial, unknown body 400, negative margin 400, GET querystring canonical numbers, GET no-params empty state).
+- **Form UX decision.** Form uses body + action selects (e.g. `body="kerbin"`, `action="land"`) rather than raw slugs — more user-friendly. Handler converts via `resolve_stop(graph, body, action)`. DvRequest schema keeps slugs internally (clean programmatic API). Shareable GET URLs use `from_body`/`from_action` params.
+
+**Acceptance** (8a gate):
+
+```
+GET  /dv                               → Workbench page, empty state
+POST /dv  from=kerbin/land to=mun/land --return  → raw 10,300 · aerobraked 6,900 · @5% 7,245
+GET  /dv?from_body=kerbin&from_action=land&to_body=mun&to_action=land&round_trip=true
+                                       → same numbers (shareable URL)
+HX-Request: POST /dv                  → partial only, no chrome
+Accept: application/json: POST /dv    → DvResponse JSON
+```
+
+### Phase 8b resume notes
+
+**Goal:** `/comms` page — comm-network planner equivalent of `ksp comms` CLI.
+
+**Start with:** `resonant_deploy()` pure math first (Phase 8b spec calls for a resonant orbit helper not yet in `comms.py`), then the `/comms` route + page following the same pattern as `/dv`. The `GET /comms` + `POST /comms` + HTMX partial structure and the workbench template shell are already in place — just add the route and template.
+
+**Before starting:** read the Phase 8 spec in [01-phases.md](01-phases.md) §Phase 8 for the full acceptance criteria. Then brainstorm or write a plan for 8b before coding.
+
 ---
 
 ## Repo map
@@ -169,16 +215,29 @@ KSP App/
 │   ├── plans.py                        save/load/list/delete
 │   ├── dv_map.py                       Δv graph + Dijkstra path_dv + plan_trip + plan_round_trip + resolve_stop (Phase 7a–7e)
 │   ├── formatting.py                   Rich tables, panels, fmt_dist, fmt_time, dv_trip_panel (with per-stop annotations)
-│   └── cli.py                          Typer app, entry point `ksp` (incl. `dv` with `--via body[:action]`)
+│   ├── cli.py                          Typer app, entry point `ksp` (incl. `dv` with `--via body[:action]`)
+│   └── web/                            FastAPI web layer (Phase 8a)
+│       ├── app.py                      FastAPI app, serve(), redirect / → /dv
+│       ├── deps.py                     get_conn() FastAPI dependency
+│       ├── schemas.py                  DvRequest / DvResponse Pydantic models
+│       ├── routes/dv.py                GET+POST /dv, GET /dv/stop-row
+│       ├── templates/base.html         Workbench shell (chip nav, brand, meta)
+│       ├── templates/pages/dv.html     Δv planner page
+│       ├── templates/macros/           body_select, action_select, error_flash, empty_state
+│       ├── templates/partials/         dv_result, stop_row, error_flash HTMX partials
+│       └── static/                     htmx.min.js, theme.css (tokens), components.css
 └── tests/
-    ├── conftest.py                     seed_db (session, RO), db (per-test RO), writable_db (per-test RW copy)
+    ├── conftest.py                     seed_db (session, RO), db (per-test RO), writable_db (per-test RW copy), client (TestClient)
     ├── test_smoke.py                   1 test
     ├── test_seed.py                    45 tests — body/antenna/DSN/hierarchy/SOI/oxygen
     ├── test_orbital.py                 18 tests — known values + hypothesis properties
     ├── test_comms.py                   16 tests — worked example + edge cases
     ├── test_plans.py                   13 tests — save/load/delete round-trip, update semantics, validation
     ├── test_dv_map.py                  56 tests — hand-built tree + Dijkstra synthetic graphs + load_dv_graph + Hohmann cross-check + resolver + 7b/7c/7d/7e acceptance
-    └── test_cli.py                     58 tests — all CLI subcommands incl. `plan {list,show,run,delete}` + `--save` + `dv` + `--via` + `--return`
+    ├── test_cli.py                     58 tests — all CLI subcommands incl. `plan {list,show,run,delete}` + `--save` + `dv` + `--via` + `--return`
+    ├── test_web_smoke.py               7 tests — health, serve(), static assets, root redirect, env vars
+    ├── test_web_schemas.py             DvRequest/DvResponse schema tests
+    └── test_web_dv.py                  10 tests — /dv GET/POST canonical numbers, HTMX partial, JSON, stop-row, 400 errors, shareable GET URL
 ```
 
 ---
@@ -205,7 +264,7 @@ KSP App/
 ```bash
 make install     # uv sync --group dev
 make seed        # regenerate ksp.db from KSPTOT + inline antenna/DSN tables
-make test        # pytest (207 tests)
+make test        # pytest (235 tests)
 make lint        # ruff check
 
 uv run ksp body kerbin
@@ -230,6 +289,11 @@ uv run ksp dv kerbin_surface duna_surface                                # Phase
 uv run ksp dv kerbin_surface duna_surface --no-aerobrake                 # Phase 7c (disable credit)
 uv run ksp dv kerbin_surface mun_surface --return                        # Phase 7d (round-trip)
 uv run ksp dv kerbin_surface minmus_surface --via mun:orbit --return     # Phase 7d (multi-stop round-trip)
+
+# Phase 8a — web server
+uv run python -m ksp_planner.web.app   # starts uvicorn on localhost:8000
+KSP_PORT=9090 KSP_RELOAD=1 uv run python -m ksp_planner.web.app
+# then open http://localhost:8000/dv
 ```
 
 ---
