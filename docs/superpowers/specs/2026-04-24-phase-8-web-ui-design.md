@@ -189,7 +189,7 @@ class DvResponse(BaseModel):
 
 ### Form UX
 
-- **From / To**: one `<select>` each, listing all 58 Δv nodes, grouped `<optgroup>` by body.
+- **From / To**: one `<select>` each, listing all 62 Δv nodes (one per `(body, state)` pair), grouped `<optgroup>` by body.
 - **Via stops**: body `<select>` (17 bodies) + action `<select>` (land / orbit / flyby). Add/remove rows; no reordering in 8a.
 - **Round-trip / aerobrake**: checkboxes (aerobrake default on, matching CLI).
 - **Margin**: numeric input, default 5, validated 0–100 server-side.
