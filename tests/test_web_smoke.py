@@ -33,3 +33,32 @@ def test_static_theme_css_has_design_tokens(client):
 def test_static_components_css_loaded(client):
     r = client.get("/static/css/components.css")
     assert r.status_code == 200
+
+
+def test_root_redirects_to_dv(client):
+    r = client.get("/", follow_redirects=False)
+    assert r.status_code in (302, 307)
+    assert r.headers["location"] == "/dv"
+
+
+def test_serve_reads_env_vars(monkeypatch):
+    """serve() forwards KSP_HOST / KSP_PORT / KSP_RELOAD to uvicorn."""
+    captured: dict = {}
+
+    def fake_run(target, **kwargs):
+        captured["target"] = target
+        captured.update(kwargs)
+
+    import uvicorn
+    monkeypatch.setattr(uvicorn, "run", fake_run)
+    monkeypatch.setenv("KSP_HOST", "0.0.0.0")
+    monkeypatch.setenv("KSP_PORT", "9090")
+    monkeypatch.setenv("KSP_RELOAD", "1")
+
+    from ksp_planner.web.app import serve
+    serve()
+
+    assert captured["target"] == "ksp_planner.web.app:app"
+    assert captured["host"] == "0.0.0.0"
+    assert captured["port"] == 9090
+    assert captured["reload"] is True
