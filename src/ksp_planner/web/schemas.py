@@ -60,6 +60,13 @@ class DvResponse(BaseModel):
 
     @classmethod
     def from_trip(cls, trip: TripPlan, req: DvRequest, equiv_cli: str) -> DvResponse:
+        """Adapt a pure TripPlan + the originating request into a DvResponse.
+
+        Precondition: `req.from_` and `req.to` must already be the resolved node
+        slugs (i.e. equal `trip.stops[0].slug` and `trip.stops[-1].slug`). Route
+        handlers that resolve body slugs via `resolve_stop` are responsible for
+        keeping these in sync — the adapter does not re-derive them from `trip`.
+        """
         # Flatten legs: trip.legs is list[list[Edge]]; we render per-edge.
         # Insert StopOut annotations between legs[i] and legs[i+1] for intermediate stops.
         flat_legs: list[LegOut] = []
@@ -76,7 +83,10 @@ class DvResponse(BaseModel):
                 )
             # After this leg's edges, if this isn't the last leg, the next stop
             # is intermediate (i.e. trip.stops[i+1]).
-            if i < len(trip.legs) - 1:
+            if i < len(trip.legs) - 1 and flat_legs:
+                # Skip annotation if the preceding leg had no edges (degenerate A→A hop):
+                # there's nothing to anchor `after_leg_idx` to. Stop annotations are
+                # render hints; missing one for a degenerate self-loop is fine.
                 next_stop = trip.stops[i + 1]
                 stop_annotations.append(
                     StopOut(

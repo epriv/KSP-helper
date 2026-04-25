@@ -108,3 +108,27 @@ def test_dv_response_from_trip_shape(db):
     assert resp.legs[0].from_slug == "kerbin_surface"
     assert resp.legs[-1].to_slug == "mun_surface"
     assert resp.equivalent_cli == "uv run ksp dv kerbin_surface mun_surface"
+
+
+def test_dv_response_from_trip_skips_annotation_for_empty_leg():
+    """A degenerate [A, A, X] trip has an empty first leg — no stop annotation should
+    be emitted with after_leg_idx = -1."""
+    from ksp_planner.dv_map import DvGraph, DvNode, Edge
+
+    nodes = [
+        DvNode(slug="a", parent_slug=None, body_slug=None, state="orbit"),
+        DvNode(slug="b", parent_slug="a", body_slug=None, state="surface"),
+    ]
+    edges = [Edge(from_slug="a", to_slug="b", dv_m_s=100, can_aerobrake=False)]
+    graph = DvGraph(nodes=nodes, edges=edges)
+    trip = plan_trip(graph, [Stop("a"), Stop("a"), Stop("b")], aerobrake=False)
+
+    req = DvRequest(from_="a", to="b", via=[StopInput(body="x", action="orbit")])
+    resp = DvResponse.from_trip(trip, req, equivalent_cli(req))
+
+    # No StopOut emitted for the degenerate empty leg.
+    assert all(s.after_leg_idx >= 0 for s in resp.stops)
+    # The legs themselves are intact.
+    assert len(resp.legs) == 1
+    assert resp.legs[0].from_slug == "a"
+    assert resp.legs[0].to_slug == "b"
