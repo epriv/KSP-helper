@@ -5,7 +5,7 @@ from __future__ import annotations
 import sqlite3
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, Form, Query, Request
 
 from ksp_planner.db import load_dv_graph
 from ksp_planner.dv_map import Stop, plan_round_trip, plan_trip, resolve_stop
@@ -70,14 +70,104 @@ class _FormState:
         self.margin_pct = margin_pct
 
 
+def _subway_rows(conn: sqlite3.Connection) -> list[dict]:
+    """Build subway-map data for the reference sidebar."""
+    graph = load_dv_graph(conn)
+    node_slugs = set(graph._nodes.keys())  # noqa: SLF001
+
+    systems = [
+        ("Inner",  ["moho", "eve", "gilly"]),
+        ("Home",   ["kerbin", "mun", "minmus"]),
+        ("Outer",  ["duna", "ike", "dres"]),
+        ("Jool",   ["jool", "laythe", "vall", "tylo", "bop", "pol"]),
+        ("Far",    ["eeloo"]),
+    ]
+    states = ["transfer", "capture", "low_orbit", "surface"]
+    label_abbrev = {
+        "moho": "Mo", "eve": "Ev", "gilly": "Gi",
+        "kerbin": "Ke", "mun": "Mu", "minmus": "Mi",
+        "duna": "Du", "ike": "Ik", "dres": "Dr",
+        "jool": "Jo", "laythe": "La", "vall": "Va",
+        "tylo": "Ty", "bop": "Bo", "pol": "Po",
+        "eeloo": "El",
+    }
+
+    rows = []
+    for sys_name, bodies in systems:
+        cells = []
+        for state in states:
+            cell_nodes = []
+            for body in bodies:
+                slug = f"{body}_{state}"
+                if slug in node_slugs:
+                    cell_nodes.append({"slug": slug, "label": label_abbrev.get(body, body[:2].title())})
+            cells.append(cell_nodes)
+        rows.append({"system": sys_name, "cells": cells})
+    return rows
+
+
 @router.get("/dv")
-def get_dv(request: Request):
+def get_dv(
+    request: Request,
+    from_body: Annotated[str | None, Query()] = None,
+    from_action: Annotated[str, Query()] = "land",
+    to_body: Annotated[str | None, Query()] = None,
+    to_action: Annotated[str, Query()] = "land",
+    round_trip: Annotated[bool, Query()] = False,
+    aerobrake: Annotated[bool, Query()] = True,
+    margin_pct: Annotated[float, Query(ge=0, le=100)] = 5.0,
+    via_body: Annotated[list[str] | None, Query()] = None,
+    via_action: Annotated[list[str] | None, Query()] = None,
+    conn: sqlite3.Connection = Depends(get_db),  # noqa: B008
+):
     from ksp_planner.web.app import templates
+
+    form_state = None
+    response = None
+    error = None
+
+    if from_body and to_body:
+        try:
+            graph = load_dv_graph(conn)
+            from_stop = resolve_stop(graph, from_body, from_action)
+            to_stop = resolve_stop(graph, to_body, to_action)
+            via = [
+                StopInput(body=b, action=a)
+                for b, a in zip(via_body or [], via_action or [])
+            ]
+            req = DvRequest(
+                **{"from": from_stop.slug},
+                to=to_stop.slug,
+                via=via,
+                round_trip=round_trip,
+                aerobrake=aerobrake,
+                margin_pct=margin_pct,
+            )
+            stops: list[Stop] = [Stop(req.from_)]
+            for v in req.via:
+                stops.append(resolve_stop(graph, v.body, v.action))
+            stops.append(Stop(req.to))
+            planner = plan_round_trip if req.round_trip else plan_trip
+            trip = planner(graph, stops, margin_pct=req.margin_pct, aerobrake=req.aerobrake)
+            response = DvResponse.from_trip(trip, req, equivalent_cli(req))
+
+            form_state = _FormState(
+                from_body=from_body,
+                from_action=from_action,
+                to_body=to_body,
+                to_action=to_action,
+                via=via,
+                round_trip=round_trip,
+                aerobrake=aerobrake,
+                margin_pct=margin_pct,
+            )
+        except (KeyError, ValueError) as e:
+            error = str(e).strip("\"'")
 
     return templates.TemplateResponse(
         request,
         "pages/dv.html",
-        _ctx(form=None, response=None, error=None, subway_rows=None),
+        _ctx(form=form_state, response=response, error=error, subway_rows=_subway_rows(conn)),
     )
 
 
@@ -181,6 +271,6 @@ def post_dv(
     return templates.TemplateResponse(
         request,
         template,
-        _ctx(form=form_state, response=response, error=error, subway_rows=None),
+        _ctx(form=form_state, response=response, error=error, subway_rows=_subway_rows(conn)),
         status_code=status,
     )

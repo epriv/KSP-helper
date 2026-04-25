@@ -115,3 +115,28 @@ def test_post_dv_negative_margin_returns_400(client):
     )
     assert r.status_code == 400
     assert "ksp-flash" in r.text
+
+
+def test_get_dv_querystring_computes_canonical_numbers(client):
+    r = client.get(
+        "/dv",
+        params={
+            "from_body": "kerbin", "from_action": "land",
+            "to_body": "mun",     "to_action": "land",
+            "round_trip": "1", "aerobrake": "1", "margin_pct": "5",
+        },
+    )
+    assert r.status_code == 200
+    body = r.text
+    assert "ksp-totals" in body      # result rendered
+    assert "10,300" in body          # raw total
+    assert "7,245" in body           # planned total
+    assert "<form" in body           # form still present
+    assert 'value="kerbin"' in body  # form prepopulated (selected)
+
+
+def test_get_dv_no_params_shows_empty_state(client):
+    r = client.get("/dv")
+    assert r.status_code == 200
+    assert "ksp-empty" in r.text
+    assert "ksp-totals" not in r.text
