@@ -96,3 +96,22 @@ def comm_network_report(
         "coverage_margin_m": margin,
         "suggestion": suggestion,
     }
+
+
+def resonant_deploy(orbit_radius_m: float, n_sats: int, mu: float) -> dict:
+    """Resonant parking orbit for deploying N evenly-spaced satellites.
+
+    Standard technique: deploy first sat at target orbit, fire retrograde into
+    a (N-1)/N period resonant orbit. After one lap, you're exactly 1/N behind
+    the first sat — deploy the next. Repeat N-1 times.
+
+    Returns resonant_period_s, resonant_sma_m, and the ratio string "(N-1)/N".
+    """
+    target_period = orbital_period(orbit_radius_m, mu)
+    resonant_period = target_period * (n_sats - 1) / n_sats
+    resonant_sma = orbit_radius_m * ((n_sats - 1) / n_sats) ** (2 / 3)
+    return {
+        "resonant_period_s": resonant_period,
+        "resonant_sma_m": resonant_sma,
+        "ratio": f"{n_sats - 1}/{n_sats}",
+    }

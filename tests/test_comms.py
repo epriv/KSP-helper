@@ -9,6 +9,7 @@ from ksp_planner.comms import (
     comm_range,
     min_sats_for_coverage,
     orbit_for_coverage,
+    resonant_deploy,
     sat_separation,
 )
 from ksp_planner.db import get_antenna, get_body, get_dsn
@@ -141,3 +142,25 @@ def test_min_sats_infinite_below_minimum_altitude():
     # For elev=5°, R=600km, orbit_r must exceed R/cos(some threshold)
     # Altitude 0 (surface) is always too low.
     assert isinf(min_sats_for_coverage(600_000, 0, radians(5.0)))
+
+
+# --------------------------------------------------------------------- #
+#  Resonant deploy                                                       #
+# --------------------------------------------------------------------- #
+
+
+def test_resonant_deploy_kerbin_3sat():
+    # Canonical: Kerbin 3-sat constellation at 5° elevation gives orbit_r ≈ 1,414,320 m.
+    orbit_r = 1_414_320.0
+    mu = 3.5316e12
+    result = resonant_deploy(orbit_r, 3, mu)
+    assert result["ratio"] == "2/3"
+    assert result["resonant_period_s"] == pytest.approx(3749, rel=0.01)
+    # resonant altitude = resonant_sma_m - Kerbin_radius(600_000 m)
+    assert (result["resonant_sma_m"] - 600_000) / 1000 == pytest.approx(479, rel=0.01)
+
+
+@pytest.mark.parametrize("n,expected", [(3, "2/3"), (4, "3/4"), (5, "4/5"), (6, "5/6")])
+def test_resonant_deploy_ratio_string(n, expected):
+    result = resonant_deploy(1_000_000, n, 3.5316e12)
+    assert result["ratio"] == expected
