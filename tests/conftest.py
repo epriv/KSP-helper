@@ -47,7 +47,7 @@ def web_app(seed_db):
 
     app.dependency_overrides[deps.get_db] = _override_get_db
     yield app
-    app.dependency_overrides.clear()
+    app.dependency_overrides.pop(deps.get_db, None)
 
 
 @pytest.fixture
