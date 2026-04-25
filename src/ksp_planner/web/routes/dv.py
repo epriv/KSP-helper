@@ -73,7 +73,7 @@ class _FormState:
 def _subway_rows(conn: sqlite3.Connection) -> list[dict]:
     """Build subway-map data for the reference sidebar."""
     graph = load_dv_graph(conn)
-    node_slugs = set(graph._nodes.keys())  # noqa: SLF001
+    node_slugs = set(graph._nodes.keys())
 
     systems = [
         ("Inner",  ["moho", "eve", "gilly"]),
@@ -100,7 +100,8 @@ def _subway_rows(conn: sqlite3.Connection) -> list[dict]:
             for body in bodies:
                 slug = f"{body}_{state}"
                 if slug in node_slugs:
-                    cell_nodes.append({"slug": slug, "label": label_abbrev.get(body, body[:2].title())})
+                    abbrev = label_abbrev.get(body, body[:2].title())
+                    cell_nodes.append({"slug": slug, "label": abbrev})
             cells.append(cell_nodes)
         rows.append({"system": sys_name, "cells": cells})
     return rows
@@ -133,7 +134,7 @@ def get_dv(
             to_stop = resolve_stop(graph, to_body, to_action)
             via = [
                 StopInput(body=b, action=a)
-                for b, a in zip(via_body or [], via_action or [])
+                for b, a in zip(via_body or [], via_action or [], strict=False)
             ]
             req = DvRequest(
                 **{"from": from_stop.slug},
