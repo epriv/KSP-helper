@@ -26,8 +26,8 @@ def test_static_theme_css_has_design_tokens(client):
     r = client.get("/static/css/theme.css")
     assert r.status_code == 200
     assert "text/css" in r.headers["content-type"]
-    assert "--color-bg" in r.text
-    assert "--color-accent" in r.text
+    assert "--bg" in r.text
+    assert "--accent" in r.text
 
 
 def test_static_components_css_loaded(client):
