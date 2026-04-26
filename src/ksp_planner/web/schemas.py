@@ -162,7 +162,7 @@ class CommsResponse(BaseModel):
         resonant: dict,
         body_radius_m: float,
         equiv_cli: str,
-    ) -> "CommsResponse":
+    ) -> CommsResponse:
         return cls(
             body_slug=report["body"],
             n_sats=report["n_sats"],

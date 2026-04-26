@@ -3,7 +3,7 @@
 > Resumable status snapshot. Paired with [01-phases.md](01-phases.md) (the plan) and [02-data-sources.md](02-data-sources.md) (the data provenance).
 
 **Last updated:** 2026-04-25
-**Tests:** 235 passing · **Lint:** clean · **Coverage:** 96% overall, 100% on `orbital.py` and `db.py`.
+**Tests:** 251 passing · **Lint:** clean · **Coverage:** 96% overall, 100% on `orbital.py` and `db.py`.
 
 ---
 
@@ -19,7 +19,7 @@
 | 5 | Hohmann / TWR / Tsiolkovsky | ✅ done | Kerbin→Duna matches canonical 1060 m/s ejection |
 | 6 | Mission plan persistence | ✅ done | All four calculators support `--save NAME`; `ksp plan {list,show,run,delete}` covers round-trip |
 | 7 | Δv planner (Dijkstra graph, margin, stops, round-trip) | ✅ done | Shipped 7a–7e; design locked in [features/dv-planner.md](features/dv-planner.md); sub-phase ladder below |
-| 8 | Web UI + prod1 deploy (FastAPI + systemd + nginx) | 🔄 in progress | 8a done — `/dv` page live at CLI parity; 8b next (comm-net page) |
+| 8 | Web UI + prod1 deploy (FastAPI + systemd + nginx) | 🔄 in progress | 8a done — `/dv` page; 8b done — `/comms` page; 8c next (plans page) |
 | 9 | Mod packs / KSP2 seeds | ⬜ not started | |
 
 ### Phase 6 completion log
@@ -172,13 +172,21 @@ HX-Request: POST /dv                  → partial only, no chrome
 Accept: application/json: POST /dv    → DvResponse JSON
 ```
 
-### Phase 8b resume notes
+### Phase 8b completion log
 
-**Goal:** `/comms` page — comm-network planner equivalent of `ksp comms` CLI.
+Shipped with TDD throughout. 16 new tests; 235 → 251 total. Lint clean. Spec at [docs/superpowers/specs/2026-04-25-comms-web-8b-design.md](superpowers/specs/2026-04-25-comms-web-8b-design.md); plan at [docs/superpowers/plans/2026-04-25-comms-web-8b.md](superpowers/plans/2026-04-25-comms-web-8b.md).
 
-**Start with:** `resonant_deploy()` pure math first (Phase 8b spec calls for a resonant orbit helper not yet in `comms.py`), then the `/comms` route + page following the same pattern as `/dv`. The `GET /comms` + `POST /comms` + HTMX partial structure and the workbench template shell are already in place — just add the route and template.
+- **`resonant_deploy()`.** New pure function in `comms.py` — computes the retrograde parking orbit (period ratio `(N-1)/N`) for deploying N evenly-spaced satellites from a single launch. Kerbin 3-sat canonical: resonant altitude ≈ 479 km, period ratio 2/3.
+- **Pydantic schemas.** `CommsRequest` validates the five inputs (body, n_sats ≥ 2, antenna, dsn_level 1–3, min_elev_deg 0–89). `CommsResponse.from_report()` adapts the `comm_network_report()` dict + `resonant_deploy()` dict to a typed response with all distances in km (SI internally, km at the edge).
+- **`routes/comms.py`.** GET + POST `/comms` following the identical pattern as `/dv`: `_compute()` helper centralises DB resolution + calculator calls; POST branches on `HX-Request` / `Accept: application/json` headers; GET accepts full querystring for shareable URLs.
+- **Templates.** `pages/comms.html` — two-column layout (form + sidebar); `partials/comms_result.html` — coverage indicator (green/red dot + margin), orbit totals, link-budget rows, gold resonant-deployment box, CLI hint. Sidebar has antenna range table + DSN level table, both loaded from DB.
+- **Nav chip enabled.** `base.html` "Comm Net" chip changed from `<span class="is-disabled">` to `<a href="/comms">` with `is-active` when on that route.
 
-**Before starting:** read the Phase 8 spec in [01-phases.md](01-phases.md) §Phase 8 for the full acceptance criteria. Then brainstorm or write a plan for 8b before coding.
+### Phase 8c resume notes
+
+**Goal:** `/plans` page — list + run saved plans from the web, equivalent to `ksp plan list` / `show` / `run`.
+
+**Before starting:** brainstorm or write a plan for 8c before coding. The plans layer (`plans.py`) and DB are already complete from Phase 6; this is purely a web layer addition.
 
 ---
 
@@ -219,12 +227,14 @@ KSP App/
 │   └── web/                            FastAPI web layer (Phase 8a)
 │       ├── app.py                      FastAPI app, serve(), redirect / → /dv
 │       ├── deps.py                     get_conn() FastAPI dependency
-│       ├── schemas.py                  DvRequest / DvResponse Pydantic models
+│       ├── schemas.py                  DvRequest / DvResponse / CommsRequest / CommsResponse Pydantic models
 │       ├── routes/dv.py                GET+POST /dv, GET /dv/stop-row
+│       ├── routes/comms.py             GET+POST /comms
 │       ├── templates/base.html         Workbench shell (chip nav, brand, meta)
 │       ├── templates/pages/dv.html     Δv planner page
+│       ├── templates/pages/comms.html  Comm network planner page
 │       ├── templates/macros/           body_select, action_select, error_flash, empty_state
-│       ├── templates/partials/         dv_result, stop_row, error_flash HTMX partials
+│       ├── templates/partials/         dv_result, comms_result, stop_row, error_flash HTMX partials
 │       └── static/                     htmx.min.js, theme.css (tokens), components.css
 └── tests/
     ├── conftest.py                     seed_db (session, RO), db (per-test RO), writable_db (per-test RW copy), client (TestClient)
@@ -236,8 +246,9 @@ KSP App/
     ├── test_dv_map.py                  56 tests — hand-built tree + Dijkstra synthetic graphs + load_dv_graph + Hohmann cross-check + resolver + 7b/7c/7d/7e acceptance
     ├── test_cli.py                     58 tests — all CLI subcommands incl. `plan {list,show,run,delete}` + `--save` + `dv` + `--via` + `--return`
     ├── test_web_smoke.py               7 tests — health, serve(), static assets, root redirect, env vars
-    ├── test_web_schemas.py             DvRequest/DvResponse schema tests
-    └── test_web_dv.py                  10 tests — /dv GET/POST canonical numbers, HTMX partial, JSON, stop-row, 400 errors, shareable GET URL
+    ├── test_web_schemas.py             DvRequest/DvResponse/CommsRequest/CommsResponse schema tests
+    ├── test_web_dv.py                  10 tests — /dv GET/POST canonical numbers, HTMX partial, JSON, stop-row, 400 errors, shareable GET URL
+    └── test_web_comms.py               9 tests — /comms GET/POST canonical numbers, HTMX partial, JSON, 400 errors, shareable GET URL
 ```
 
 ---
@@ -264,7 +275,7 @@ KSP App/
 ```bash
 make install     # uv sync --group dev
 make seed        # regenerate ksp.db from KSPTOT + inline antenna/DSN tables
-make test        # pytest (235 tests)
+make test        # pytest (251 tests)
 make lint        # ruff check
 
 uv run ksp body kerbin

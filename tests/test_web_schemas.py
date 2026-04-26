@@ -134,7 +134,7 @@ def test_dv_response_from_trip_skips_annotation_for_empty_leg():
     assert resp.legs[0].to_slug == "b"
 
 
-from ksp_planner.web.schemas import CommsRequest, CommsResponse  # noqa: F811
+from ksp_planner.web.schemas import CommsRequest, CommsResponse  # noqa: E402
 
 
 def test_comms_request_rejects_n_sats_below_2():
