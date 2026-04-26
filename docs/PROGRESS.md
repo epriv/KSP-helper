@@ -19,8 +19,20 @@
 | 5 | Hohmann / TWR / Tsiolkovsky | ✅ done | Kerbin→Duna matches canonical 1060 m/s ejection |
 | 6 | Mission plan persistence | ✅ done | All four calculators support `--save NAME`; `ksp plan {list,show,run,delete}` covers round-trip |
 | 7 | Δv planner (Dijkstra graph, margin, stops, round-trip) | ✅ done | Shipped 7a–7e; design locked in [features/dv-planner.md](features/dv-planner.md); sub-phase ladder below |
-| 8 | Web UI + prod1 deploy (FastAPI + systemd + nginx) | 🔄 in progress | 8a done — `/dv` page; 8b done — `/comms` page; 8c next (plans page) |
+| 8 | Web UI (FastAPI) | 🔄 in progress | Tier 1 done — `/dv` + `/comms` + offline fonts; Tier 2/3 deferred (see roadmap below) |
 | 9 | Mod packs / KSP2 seeds | ⬜ not started | |
+
+### Tiered roadmap
+
+**Play First, Build Later.** The two major features are live. Everything else is polish for a later sprint.
+
+| Tier | Status | Scope |
+|------|--------|-------|
+| **Tier 1 — Mission Ready** | ✅ done | Δv Trip Planner (`/dv`) + Comm Network (`/comms`) + offline fonts + shareable URLs |
+| **Tier 2 — VAB Workbench** | ⬜ deferred | Hohmann transfer + TWR + Δv Budget web pages (calculators already exist in CLI) |
+| **Tier 3 — Mission Archive** | ⬜ deferred | Web-based save/load/delete for all calculations (`/plans` page) |
+
+---
 
 ### Phase 6 completion log
 
@@ -182,11 +194,12 @@ Shipped with TDD throughout. 16 new tests; 235 → 251 total. Lint clean. Spec a
 - **Templates.** `pages/comms.html` — two-column layout (form + sidebar); `partials/comms_result.html` — coverage indicator (green/red dot + margin), orbit totals, link-budget rows, gold resonant-deployment box, CLI hint. Sidebar has antenna range table + DSN level table, both loaded from DB.
 - **Nav chip enabled.** `base.html` "Comm Net" chip changed from `<span class="is-disabled">` to `<a href="/comms">` with `is-active` when on that route.
 
-### Phase 8c resume notes
+### Phase 8 — current state
 
-**Goal:** `/plans` page — list + run saved plans from the web, equivalent to `ksp plan list` / `show` / `run`.
+Tier 1 is complete. Tier 2 and Tier 3 are deferred per the tiered roadmap above.
 
-**Before starting:** brainstorm or write a plan for 8c before coding. The plans layer (`plans.py`) and DB are already complete from Phase 6; this is purely a web layer addition.
+- **Next Tier 2 task:** brainstorm + plan for `/hohmann`, `/twr`, `/dv-budget` web pages (calculators already exist in `orbital.py` and `cli.py` — web layer only).
+- **Next Tier 3 task:** brainstorm + plan for `/plans` page (CRUD on saved plans; `plans.py` + DB already complete from Phase 6).
 
 ---
 
@@ -301,10 +314,11 @@ uv run ksp dv kerbin_surface duna_surface --no-aerobrake                 # Phase
 uv run ksp dv kerbin_surface mun_surface --return                        # Phase 7d (round-trip)
 uv run ksp dv kerbin_surface minmus_surface --via mun:orbit --return     # Phase 7d (multi-stop round-trip)
 
-# Phase 8a — web server
+# Phase 8 — web server (Tier 1 live)
 uv run python -m ksp_planner.web.app   # starts uvicorn on localhost:8000
 KSP_PORT=9090 KSP_RELOAD=1 uv run python -m ksp_planner.web.app
-# then open http://localhost:8000/dv
+# then open http://localhost:8000/dv   (Δv Trip Planner)
+#           http://localhost:8000/comms (Comm Network)
 ```
 
 ---
