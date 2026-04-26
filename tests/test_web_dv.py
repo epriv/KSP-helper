@@ -151,3 +151,17 @@ def test_get_dv_no_params_shows_empty_state(client):
     assert r.status_code == 200
     assert "ksp-empty" in r.text
     assert "ksp-totals" not in r.text
+
+
+def test_get_dv_has_itinerary_list_with_js(client):
+    r = client.get("/dv")
+    assert r.status_code == 200
+    assert "itinerary-list" in r.text
+    assert "moveStopUp" in r.text
+    assert "moveStopDown" in r.text
+    # origin and destination are still present as named form fields
+    assert 'name="from_body"' in r.text
+    assert 'name="to_body"' in r.text
+    # HTMX "add stop" inserts before #to-row
+    assert 'hx-target="#to-row"' in r.text
+    assert 'hx-swap="beforebegin"' in r.text

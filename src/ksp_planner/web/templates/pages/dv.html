@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros/forms.html" import body_select, action_select %}
+{% from "macros/forms.html" import body_select, action_select, via_stop_row %}
 {% from "macros/panels.html" import error_flash, empty_state %}
 
 {% block title %}Δv Trip Planner — KSP Planner{% endblock %}
@@ -19,39 +19,34 @@
     <form method="post" action="/dv"
           hx-post="/dv" hx-target="#result" hx-swap="innerHTML" hx-push-url="true">
 
-      {# FROM / TO #}
-      <div class="ksp-stop-row">
-        <div class="ksp-stop">
-          <div class="ksp-stop-label">FROM</div>
+      <div class="itinerary-list" id="itinerary-list">
+
+        {# Origin — :first-child, CSS labels it ORIGIN (accent) #}
+        <div class="stop-row">
+          <span class="stop-tag"></span>
           {{ body_select("from_body", bodies, selected=(form.from_body if form else "kerbin")) }}
           {{ action_select("from_action", selected=(form.from_action if form else "land")) }}
         </div>
-        <div class="ksp-stop-arrow">→</div>
-        <div class="ksp-stop">
-          <div class="ksp-stop-label">TO</div>
+
+        {# Waypoints — Jinja loop repopulates on POST/GET; HTMX inserts more before #to-row #}
+        {% if form and form.via %}
+          {% for stop in form.via %}
+            {{ via_stop_row(bodies, stop.body, stop.action) }}
+          {% endfor %}
+        {% endif %}
+
+        {# Destination — :last-child, CSS labels it DESTINATION (gold); HTMX anchor #}
+        <div class="stop-row" id="to-row">
+          <span class="stop-tag"></span>
           {{ body_select("to_body", bodies, selected=(form.to_body if form else "mun")) }}
           {{ action_select("to_action", selected=(form.to_action if form else "land")) }}
         </div>
+
       </div>
 
-      {# VIA stops #}
-      <div id="via-stops">
-        {% if form and form.via %}
-          {% for stop in form.via %}
-            <div class="ksp-via-row">
-              <span class="ksp-via-tag">VIA</span>
-              {{ body_select("via_body", bodies, selected=stop.body) }}
-              {{ action_select("via_action", selected=stop.action) }}
-              <button class="ksp-icon-btn" type="button" onclick="this.parentElement.remove()">×</button>
-            </div>
-          {% endfor %}
-        {% endif %}
-      </div>
-
-      {# Controls #}
       <div class="ksp-controls">
         <button type="button" class="ksp-btn-ghost"
-                hx-get="/dv/stop-row" hx-target="#via-stops" hx-swap="beforeend">+ Add stop</button>
+                hx-get="/dv/stop-row" hx-target="#to-row" hx-swap="beforebegin">+ Add Stop</button>
         <label class="ksp-toggle">
           <input type="checkbox" name="aerobrake" {% if not form or form.aerobrake %}checked{% endif %}> <span>Aerobrake</span>
         </label>
@@ -68,7 +63,6 @@
       </div>
     </form>
 
-    {# Result area (swapped by HTMX) #}
     <div id="result">
       {% if response %}
         {% include "partials/dv_result.html" %}
@@ -106,4 +100,23 @@
   {% endif %}
 
 </div>
+
+<script>
+function moveStopUp(btn) {
+  const row = btn.closest('.stop-row');
+  const prev = row.previousElementSibling;
+  // Don't move above origin (first-child is never movable)
+  if (prev && prev !== row.parentNode.firstElementChild) {
+    row.parentNode.insertBefore(row, prev);
+  }
+}
+function moveStopDown(btn) {
+  const row = btn.closest('.stop-row');
+  const next = row.nextElementSibling;
+  // Don't move below destination (last-child is never movable)
+  if (next && next !== row.parentNode.lastElementChild) {
+    row.parentNode.insertBefore(next, row);
+  }
+}
+</script>
 {% endblock %}
