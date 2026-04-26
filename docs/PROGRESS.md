@@ -3,7 +3,7 @@
 > Resumable status snapshot. Paired with [01-phases.md](01-phases.md) (the plan) and [02-data-sources.md](02-data-sources.md) (the data provenance).
 
 **Last updated:** 2026-04-25
-**Tests:** 251 passing · **Lint:** clean · **Coverage:** 96% overall, 100% on `orbital.py` and `db.py`.
+**Tests:** 254 passing · **Lint:** clean · **Coverage:** 96% overall, 100% on `orbital.py` and `db.py`.
 
 ---
 
@@ -183,6 +183,16 @@ GET  /dv?from_body=kerbin&from_action=land&to_body=mun&to_action=land&round_trip
 HX-Request: POST /dv                  → partial only, no chrome
 Accept: application/json: POST /dv    → DvResponse JSON
 ```
+
+### Phase 8a-polish completion log
+
+Shipped form UX refactor. 3 new tests; 251 → 254 total. Lint clean. Plan at [docs/superpowers/plans/2026-04-25-flight-log-refactor-8a-polish.md](superpowers/plans/2026-04-25-flight-log-refactor-8a-polish.md).
+
+- **Itinerary layout.** `pages/dv.html` changed from a fixed FROM/TO 2-column grid + separate `#via-stops` div to a flat `.itinerary-list` where every stop row is a direct child. CSS `:first-child`/`:last-child` selectors auto-label rows as Origin (mint) / Waypoint / Destination (gold) with a connecting vertical line. No backend changes — `from_body`/`to_body`/`via_body[]` field names unchanged.
+- **Reorder controls.** Via-stop rows gained ↑↓ buttons; vanilla JS `moveStopUp`/`moveStopDown` swaps siblings while preserving form field order. Origin and Destination rows have no controls (guards prevent moving above origin or below destination).
+- **`via_stop_row` macro.** Extracted to `macros/forms.html` so HTMX-added rows (via `stop_row.html`) and Jinja-repopulated rows (after POST/GET) render identically.
+- **CSS fixes.** `.ksp-empty` stale `var(--serif)` reference dropped (variable was removed in offline-fonts commit).
+- **Flyby test.** `test_post_dv_via_flyby_resolves_to_transfer_node` locks in the guarantee that `flyby → duna_transfer`, no capture burn included in the path.
 
 ### Phase 8b completion log
 

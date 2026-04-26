@@ -181,9 +181,9 @@ def test_post_dv_via_flyby_resolves_to_transfer_node(client):
     )
     assert r.status_code == 200
     assert "ksp-totals" in r.text
-    # Extract computed legs section (between ksp-legs div markers)
     import re
-    legs_match = re.search(r'<div class="ksp-legs">(.*?)</div>\s*<div class="ksp-cli">', r.text, re.DOTALL)
+    pattern = r'<div class="ksp-legs">(.*?)</div>\s*<div class="ksp-cli">'
+    legs_match = re.search(pattern, r.text, re.DOTALL)
     assert legs_match, "ksp-legs section not found"
     legs_html = legs_match.group(1)
     # Flyby resolves to transfer, not capture
