@@ -21,3 +21,16 @@
   <option value="flyby" {% if selected == "flyby" %}selected{% endif %}>Transfer</option>
 </select>
 {% endmacro %}
+
+{% macro via_stop_row(bodies, selected_body="minmus", selected_action="orbit") %}
+<div class="stop-row">
+  <span class="stop-tag"></span>
+  {{ body_select("via_body", bodies, selected=selected_body) }}
+  {{ action_select("via_action", selected=selected_action) }}
+  <div class="stop-controls">
+    <button class="btn-ctrl" type="button" onclick="moveStopUp(this)">↑</button>
+    <button class="btn-ctrl" type="button" onclick="moveStopDown(this)">↓</button>
+    <button class="btn-ctrl" type="button" onclick="this.closest('.stop-row').remove()">×</button>
+  </div>
+</div>
+{% endmacro %}

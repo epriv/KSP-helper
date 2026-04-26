@@ -1,7 +1,2 @@
-{% from "macros/forms.html" import body_select, action_select %}
-<div class="ksp-via-row">
-  <span class="ksp-via-tag">VIA</span>
-  {{ body_select("via_body", bodies, selected="minmus") }}
-  {{ action_select("via_action", selected="orbit") }}
-  <button class="ksp-icon-btn" type="button" onclick="this.parentElement.remove()">×</button>
-</div>
+{% from "macros/forms.html" import via_stop_row %}
+{{ via_stop_row(bodies) }}

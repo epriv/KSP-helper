@@ -96,6 +96,17 @@ def test_get_dv_stop_row_partial(client):
     assert "<html" not in r.text
 
 
+def test_get_dv_stop_row_partial_has_reorder_buttons(client):
+    r = client.get("/dv/stop-row")
+    assert r.status_code == 200
+    assert "↑" in r.text
+    assert "↓" in r.text
+    assert "moveStopUp" in r.text
+    assert "moveStopDown" in r.text
+    assert 'name="via_body"' in r.text
+    assert 'name="via_action"' in r.text
+
+
 def test_post_dv_unknown_body_returns_400_flash(client):
     r = client.post(
         "/dv",
