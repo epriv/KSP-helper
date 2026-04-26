@@ -165,3 +165,27 @@ def test_get_dv_has_itinerary_list_with_js(client):
     # HTMX "add stop" inserts before #to-row
     assert 'hx-target="#to-row"' in r.text
     assert 'hx-swap="beforebegin"' in r.text
+
+
+def test_post_dv_via_flyby_resolves_to_transfer_node(client):
+    """flyby action resolves to _transfer — path visits the transfer node without
+    a capture burn, so the capture node slug must not appear in the computed legs."""
+    r = client.post(
+        "/dv",
+        data={
+            "from_body": "kerbin", "from_action": "land",
+            "to_body": "jool",    "to_action": "orbit",
+            "via_body": "duna",   "via_action": "flyby",
+            "aerobrake": "on",    "margin_pct": "5",
+        },
+    )
+    assert r.status_code == 200
+    assert "ksp-totals" in r.text
+    # Extract computed legs section (between ksp-legs div markers)
+    import re
+    legs_match = re.search(r'<div class="ksp-legs">(.*?)</div>\s*<div class="ksp-cli">', r.text, re.DOTALL)
+    assert legs_match, "ksp-legs section not found"
+    legs_html = legs_match.group(1)
+    # Flyby resolves to transfer, not capture
+    assert "duna_transfer" in legs_html
+    assert "duna_capture" not in legs_html
