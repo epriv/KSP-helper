@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% from "macros/forms.html" import body_select %}
+{% from "macros/panels.html" import error_flash %}
+
+{% block title %}Comm Network — KSP Planner{% endblock %}
+
+{% block content %}
+<div style="display:grid;grid-template-columns:1fr 340px;gap:22px;align-items:start;">
+
+  {# ── Constellation planner panel ── #}
+  <div class="ksp-panel">
+    <div class="ksp-panel-header">
+      <div class="ksp-panel-eyebrow">Comm Network</div>
+      <h2 class="ksp-panel-title">Constellation</h2>
+    </div>
+
+    {% if error %}{{ error_flash(error) }}{% endif %}
+
+    <form method="post" action="/comms"
+          hx-post="/comms" hx-target="#result" hx-swap="innerHTML" hx-push-url="true">
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div class="ksp-stop">
+          <div class="ksp-stop-label">Target body</div>
+          {{ body_select("body", bodies, selected=(form.body if form else "kerbin")) }}
+        </div>
+        <div class="ksp-stop">
+          <div class="ksp-stop-label">Satellites</div>
+          <input class="ksp-input" type="number" name="n_sats" min="2"
+                 value="{{ form.n_sats if form else 3 }}">
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 90px 100px;gap:10px;margin-bottom:10px;">
+        <div class="ksp-stop">
+          <div class="ksp-stop-label">Antenna</div>
+          <select class="ksp-select" name="antenna">
+            {% for ant in antenna_options %}
+              <option value="{{ ant.name }}"
+                {% if form and form.antenna == ant.name %}selected
+                {% elif not form and ant.name == "RA-15 Relay Antenna" %}selected
+                {% endif %}>{{ ant.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="ksp-stop">
+          <div class="ksp-stop-label">DSN level</div>
+          <select class="ksp-select" name="dsn_level">
+            {% for lvl in [1, 2, 3] %}
+              <option value="{{ lvl }}"
+                {% if form and form.dsn_level == lvl %}selected
+                {% elif not form and lvl == 2 %}selected
+                {% endif %}>{{ lvl }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="ksp-stop">
+          <div class="ksp-stop-label">Min elev</div>
+          <div class="ksp-margin">
+            <input class="ksp-input" type="number" name="min_elev_deg"
+                   min="0" max="89" step="0.1"
+                   value="{{ form.min_elev_deg if form else 5 }}" style="width:52px;">
+            <span class="ksp-suffix">°</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="ksp-controls">
+        <button class="btn-primary" type="submit">Calculate →</button>
+      </div>
+    </form>
+
+    <div id="result">
+      {% if response %}
+        {% include "partials/comms_result.html" %}
+      {% else %}
+        <div class="ksp-empty">Submit the form above to check coverage.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ── Sidebar: antenna + DSN reference ── #}
+  <div style="display:flex;flex-direction:column;gap:14px;">
+
+    <div class="ksp-panel">
+      <div class="ksp-panel-header">
+        <div class="ksp-panel-eyebrow">Reference</div>
+        <h2 class="ksp-panel-title">Antennas</h2>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:2px;font-family:var(--mono);font-size:12px;">
+        {% for ant in antennas %}
+        <div style="display:flex;justify-content:space-between;padding:6px 10px;
+                    background:var(--bg-2);border-radius:3px;">
+          <span style="color:var(--text-2);">{{ ant.name }}</span>
+          <span style="color:var(--text);font-variant-numeric:tabular-nums;">
+            {{ "{:,.0f}".format(ant.range_m / 1000) }} km
+          </span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="ksp-panel">
+      <div class="ksp-panel-header">
+        <div class="ksp-panel-eyebrow">Reference</div>
+        <h2 class="ksp-panel-title">DSN Levels</h2>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:2px;font-family:var(--mono);font-size:12px;">
+        {% for dsn in dsn_levels %}
+        <div style="display:flex;justify-content:space-between;padding:6px 10px;
+                    background:var(--bg-2);border-radius:3px;">
+          <span style="color:var(--text-2);">Level {{ dsn.level }}</span>
+          <span style="color:var(--text);font-variant-numeric:tabular-nums;">
+            {{ "{:,.0f}".format(dsn.range_m / 1000) }} km
+          </span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+  </div>
+
+</div>
+{% endblock %}
