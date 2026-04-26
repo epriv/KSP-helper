@@ -66,3 +66,52 @@ def test_post_comms_geometry_impossible(client):
     })
     assert r.status_code == 400
     assert "geometrically impossible" in r.text or "unbounded" in r.text
+
+
+def test_post_comms_htmx_partial(client):
+    r = client.post("/comms",
+        data={
+            "body": "kerbin",
+            "antenna": "RA-15 Relay Antenna",
+            "n_sats": "3",
+            "dsn_level": "2",
+            "min_elev_deg": "5",
+        },
+        headers={"HX-Request": "true"},
+    )
+    assert r.status_code == 200
+    assert "<html" not in r.text          # partial only — no page chrome
+    assert "Coverage OK" in r.text
+
+
+def test_post_comms_json(client):
+    r = client.post("/comms",
+        data={
+            "body": "kerbin",
+            "antenna": "RA-15 Relay Antenna",
+            "n_sats": "3",
+            "dsn_level": "2",
+            "min_elev_deg": "5",
+        },
+        headers={"Accept": "application/json"},
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["coverage_ok"] is True
+    assert data["orbit_altitude_km"] == pytest.approx(814.32, rel=0.01)
+    assert data["resonant_altitude_km"] == pytest.approx(479.33, rel=0.01)
+    assert data["resonant_ratio"] == "2/3"
+
+
+def test_get_comms_shareable_url(client):
+    r = client.get("/comms", params={
+        "body": "kerbin",
+        "antenna": "RA-15 Relay Antenna",
+        "n_sats": 3,
+        "dsn_level": 2,
+        "min_elev_deg": 5.0,
+    })
+    assert r.status_code == 200
+    assert "Coverage OK" in r.text
+    assert "814" in r.text    # orbit altitude
+    assert "479" in r.text    # resonant altitude
