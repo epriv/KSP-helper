@@ -125,3 +125,60 @@ def equivalent_cli(req: DvRequest) -> str:
         margin_str = f"{req.margin_pct:g}"
         parts.append(f"--margin {margin_str}")
     return " ".join(parts)
+
+
+class CommsRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    body: str = Field(..., min_length=1)
+    n_sats: int = Field(3, ge=2)
+    antenna: str = Field(..., min_length=1)
+    dsn_level: int = Field(2, ge=1, le=3)
+    min_elev_deg: float = Field(5.0, ge=0, lt=90)
+
+
+class CommsResponse(BaseModel):
+    body_slug: str
+    n_sats: int
+    antenna_name: str
+    dsn_level: int
+    min_elev_deg: float
+    orbit_altitude_km: float
+    period_s: float
+    range_sat_to_sat_km: float
+    range_sat_to_dsn_km: float
+    sat_separation_km: float
+    coverage_ok: bool
+    coverage_margin_km: float
+    suggestion: str
+    resonant_altitude_km: float
+    resonant_period_s: float
+    resonant_ratio: str
+    equivalent_cli: str
+
+    @classmethod
+    def from_report(
+        cls,
+        report: dict,
+        resonant: dict,
+        body_radius_m: float,
+        equiv_cli: str,
+    ) -> "CommsResponse":
+        return cls(
+            body_slug=report["body"],
+            n_sats=report["n_sats"],
+            antenna_name=report["antenna"],
+            dsn_level=report["dsn_level"],
+            min_elev_deg=report["min_elev_deg"],
+            orbit_altitude_km=report["orbit_altitude_m"] / 1000,
+            period_s=report["period_s"],
+            range_sat_to_sat_km=report["range_sat_to_sat_m"] / 1000,
+            range_sat_to_dsn_km=report["range_sat_to_dsn_m"] / 1000,
+            sat_separation_km=report["sat_separation_m"] / 1000,
+            coverage_ok=report["coverage_ok"],
+            coverage_margin_km=report["coverage_margin_m"] / 1000,
+            suggestion=report["suggestion"],
+            resonant_altitude_km=(resonant["resonant_sma_m"] - body_radius_m) / 1000,
+            resonant_period_s=resonant["resonant_period_s"],
+            resonant_ratio=resonant["ratio"],
+            equivalent_cli=equiv_cli,
+        )

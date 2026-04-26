@@ -132,3 +132,41 @@ def test_dv_response_from_trip_skips_annotation_for_empty_leg():
     assert len(resp.legs) == 1
     assert resp.legs[0].from_slug == "a"
     assert resp.legs[0].to_slug == "b"
+
+
+from ksp_planner.web.schemas import CommsRequest, CommsResponse  # noqa: F811
+
+
+def test_comms_request_rejects_n_sats_below_2():
+    with pytest.raises(ValidationError):
+        CommsRequest(body="kerbin", n_sats=1, antenna="RA-15 Relay Antenna",
+                     dsn_level=2, min_elev_deg=5.0)
+
+
+def test_comms_response_from_report_converts_units():
+    report = {
+        "body": "kerbin",
+        "n_sats": 3,
+        "antenna": "RA-15 Relay Antenna",
+        "dsn_level": 2,
+        "min_elev_deg": 5.0,
+        "orbit_altitude_m": 814_320.0,
+        "orbit_radius_m": 1_414_320.0,
+        "period_s": 5623.6,
+        "range_sat_to_sat_m": 15_000_000_000.0,
+        "range_sat_to_dsn_m": 27_386_127_875.0,
+        "sat_separation_m": 2_449_490.0,
+        "coverage_ok": True,
+        "coverage_margin_m": 14_997_550_510.0,
+        "suggestion": "",
+    }
+    resonant = {
+        "resonant_period_s": 3749.1,
+        "resonant_sma_m": 1_079_328.0,
+        "ratio": "2/3",
+    }
+    resp = CommsResponse.from_report(report, resonant, 600_000.0, "uv run ksp comms kerbin")
+    assert resp.orbit_altitude_km == pytest.approx(814.32, rel=0.001)
+    assert resp.resonant_altitude_km == pytest.approx(479.328, rel=0.01)
+    assert resp.resonant_ratio == "2/3"
+    assert resp.coverage_ok is True
