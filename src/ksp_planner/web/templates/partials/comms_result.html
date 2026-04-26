@@ -1,0 +1,89 @@
+{# Comm network result partial. Rendered inside #result on POST /comms. #}
+
+{# ── Coverage indicator ── #}
+<div class="ksp-coverage {{ 'is-ok' if response.coverage_ok else 'is-bad' }}">
+  <div class="ksp-coverage-dot"></div>
+  <span class="ksp-coverage-label">
+    {{ "Coverage OK" if response.coverage_ok else "Coverage FAIL" }}
+  </span>
+  <span class="ksp-coverage-margin">
+    {{ "{:,.0f}".format(response.coverage_margin_km | abs) }} km
+    {{ "margin" if response.coverage_ok else "deficit" }}
+  </span>
+</div>
+
+{# Suggestion on failure #}
+{% if response.suggestion %}
+<div class="ksp-flash">
+  <span class="label">hint:</span>{{ response.suggestion }}
+</div>
+{% endif %}
+
+{# ── Orbit totals ── #}
+<div class="ksp-totals">
+  <div class="ksp-total is-primary">
+    <div class="ksp-total-label">Altitude</div>
+    <div class="ksp-total-value">{{ "{:,.0f}".format(response.orbit_altitude_km) }} km</div>
+  </div>
+  <div class="ksp-total">
+    <div class="ksp-total-label">Period</div>
+    <div class="ksp-total-value">
+      {{ "%dh %02dm" % (response.period_s // 3600, (response.period_s % 3600) // 60) }}
+    </div>
+  </div>
+</div>
+
+{# ── Link budget rows ── #}
+<div class="ksp-legs">
+  {% for label, value_km in [
+    ("Sat ↔ Sat range", response.range_sat_to_sat_km),
+    ("Sat ↔ DSN range", response.range_sat_to_dsn_km),
+    ("Sat separation (chord)", response.sat_separation_km),
+  ] %}
+  <div class="ksp-leg" style="grid-template-columns:1fr auto;">
+    <span style="color:var(--text-2);">{{ label }}</span>
+    <span style="color:var(--text);font-variant-numeric:tabular-nums;">
+      {{ "{:,.0f}".format(value_km) }} km
+    </span>
+  </div>
+  {% endfor %}
+</div>
+
+{# ── Resonant deployment orbit ── #}
+<div style="background:var(--bg-2);border:1px solid var(--line-strong);
+            border-left:2px solid var(--gold);border-radius:4px;
+            padding:10px 14px;display:flex;flex-direction:column;gap:6px;">
+  <div style="font-family:var(--mono);font-size:10px;letter-spacing:0.14em;
+              text-transform:uppercase;color:var(--gold);">
+    Resonant deployment orbit
+  </div>
+  <div style="display:flex;gap:16px;">
+    <div>
+      <div style="font-family:var(--mono);font-size:9px;color:var(--text-3);
+                  text-transform:uppercase;letter-spacing:0.1em;">Altitude</div>
+      <div style="font-family:var(--mono);font-size:15px;color:var(--gold);">
+        {{ "{:,.0f}".format(response.resonant_altitude_km) }} km
+      </div>
+    </div>
+    <div>
+      <div style="font-family:var(--mono);font-size:9px;color:var(--text-3);
+                  text-transform:uppercase;letter-spacing:0.1em;">Period</div>
+      <div style="font-family:var(--mono);font-size:15px;color:var(--gold);">
+        {{ "%dh %02dm" % (response.resonant_period_s // 3600, (response.resonant_period_s % 3600) // 60) }}
+      </div>
+    </div>
+    <div>
+      <div style="font-family:var(--mono);font-size:9px;color:var(--text-3);
+                  text-transform:uppercase;letter-spacing:0.1em;">Ratio</div>
+      <div style="font-family:var(--mono);font-size:15px;color:var(--gold);">
+        {{ response.resonant_ratio }}
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ── CLI hint ── #}
+<div class="ksp-cli">
+  <span class="ksp-cli-prompt">$</span>
+  <code>{{ response.equivalent_cli }}</code>
+</div>
