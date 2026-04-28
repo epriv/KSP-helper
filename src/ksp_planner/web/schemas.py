@@ -182,3 +182,29 @@ class CommsResponse(BaseModel):
             resonant_ratio=resonant["ratio"],
             equivalent_cli=equiv_cli,
         )
+
+
+class SweetSpotOut(BaseModel):
+    altitude_km: float
+    period_s: float
+    swath_km: float
+    shift_km: float
+    orbits_per_day: float
+    days_to_coverage: float
+
+
+class ScanningRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    body: str = Field(..., min_length=1)
+    fov_deg: float = Field(5.0, gt=0, le=90)
+    min_alt_km: float | None = Field(None, ge=0)
+    max_alt_km: float | None = Field(None, ge=0)
+
+
+class ScanningResponse(BaseModel):
+    body_slug: str
+    body_name: str
+    fov_deg: float
+    min_alt_km: float
+    max_alt_km: float
+    sweet_spots: list[SweetSpotOut]

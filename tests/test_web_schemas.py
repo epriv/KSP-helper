@@ -9,7 +9,10 @@ from ksp_planner.dv_map import Stop, plan_trip
 from ksp_planner.web.schemas import (
     DvRequest,
     DvResponse,
+    ScanningRequest,
+    ScanningResponse,
     StopInput,
+    SweetSpotOut,
     equivalent_cli,
 )
 
@@ -170,3 +173,66 @@ def test_comms_response_from_report_converts_units():
     assert resp.resonant_altitude_km == pytest.approx(479.328, rel=0.01)
     assert resp.resonant_ratio == "2/3"
     assert resp.coverage_ok is True
+
+
+# ── Phase 8f scanning schemas ──────────────────────────────────────────────
+
+
+def test_scanning_request_defaults():
+    req = ScanningRequest(body="kerbin")
+    assert req.fov_deg == 5.0
+    assert req.min_alt_km is None
+    assert req.max_alt_km is None
+
+
+def test_scanning_request_custom_fov():
+    req = ScanningRequest(body="duna", fov_deg=2.0)
+    assert req.fov_deg == 2.0
+
+
+def test_scanning_request_rejects_nonpositive_fov():
+    with pytest.raises(ValidationError):
+        ScanningRequest(body="kerbin", fov_deg=0.0)
+    with pytest.raises(ValidationError):
+        ScanningRequest(body="kerbin", fov_deg=-1.0)
+
+
+def test_scanning_request_rejects_fov_over_90():
+    with pytest.raises(ValidationError):
+        ScanningRequest(body="kerbin", fov_deg=91.0)
+
+
+def test_sweet_spot_out_fields():
+    spot = SweetSpotOut(
+        altitude_km=1270.0,
+        period_s=8_549.0,
+        swath_km=110.8,
+        shift_km=1_494.2,
+        orbits_per_day=2.52,
+        days_to_coverage=13.5,
+    )
+    assert spot.altitude_km == pytest.approx(1270.0)
+    assert spot.days_to_coverage == pytest.approx(13.5)
+
+
+def test_scanning_response_serializable():
+    resp = ScanningResponse(
+        body_slug="kerbin",
+        body_name="Kerbin",
+        fov_deg=5.0,
+        min_alt_km=80.0,
+        max_alt_km=2500.0,
+        sweet_spots=[
+            SweetSpotOut(
+                altitude_km=1270.0,
+                period_s=8_549.0,
+                swath_km=110.8,
+                shift_km=1_494.2,
+                orbits_per_day=2.52,
+                days_to_coverage=13.5,
+            )
+        ],
+    )
+    assert resp.body_slug == "kerbin"
+    assert len(resp.sweet_spots) == 1
+    assert resp.sweet_spots[0].altitude_km == pytest.approx(1270.0)
