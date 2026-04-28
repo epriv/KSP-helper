@@ -100,8 +100,9 @@ def find_sweet_spots(
     """
     candidates: list[SweetSpot] = []
 
-    alt_m = min_alt_m
-    while alt_m <= max_alt_m:
+    n_steps = int((max_alt_m - min_alt_m) / step_m) + 1
+    for i in range(n_steps):
+        alt_m = min_alt_m + i * step_m
         sma_m = body_radius_m + alt_m
         T_orb = 2.0 * math.pi * math.sqrt(sma_m**3 / mu_m3s2)
         opd = rotation_period_s / T_orb
@@ -123,7 +124,6 @@ def find_sweet_spots(
                 resonant_ratio=ratio,
             )
         )
-        alt_m += step_m
 
     non_resonant = [c for c in candidates if not c.resonant]
     non_resonant.sort(key=lambda c: c.days_to_coverage)

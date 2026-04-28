@@ -78,6 +78,19 @@ def test_is_resonant_nonresonant_returns_empty_ratio():
     assert ratio == ""
 
 
+def test_is_resonant_catches_near_resonant():
+    # 3.002 is within 0.5% of 3/1 (error = 0.067%) — must be caught
+    resonant, ratio = is_resonant(3.002, max_q=12, tolerance=0.005)
+    assert resonant
+    assert ratio == "3/1"
+
+
+def test_is_resonant_passes_outside_tolerance():
+    # 3.02 is 0.67% away from 3/1 — outside 0.5% tolerance, not resonant
+    resonant, _ = is_resonant(3.02, max_q=12, tolerance=0.005)
+    assert not resonant
+
+
 def test_days_to_coverage_is_positive():
     T = _period(763_000)
     days = days_to_full_coverage(_R, 763_000, 5.0, T, _T_ROT)
@@ -89,6 +102,13 @@ def test_days_to_coverage_wider_fov_means_fewer_days():
     days_narrow = days_to_full_coverage(_R, 500_000, 2.0, T, _T_ROT)
     days_wide   = days_to_full_coverage(_R, 500_000, 5.0, T, _T_ROT)
     assert days_wide < days_narrow
+
+
+def test_days_to_coverage_zero_fov_returns_inf():
+    import math as _math
+    T = _period(500_000)
+    days = days_to_full_coverage(_R, 500_000, 0.0, T, _T_ROT)
+    assert _math.isinf(days)
 
 
 def test_find_sweet_spots_returns_nonempty_for_kerbin():
