@@ -1,0 +1,68 @@
+{# Polar scanning sweet-spot result partial. Rendered inside #result on POST /scanning. #}
+
+<div class="scanning-results">
+  <div class="ksp-panel-header" style="margin-bottom:10px;">
+    <div style="font-family:var(--mono);font-size:10px;letter-spacing:0.14em;
+                text-transform:uppercase;color:var(--text-3);">
+      {{ response.body_name }} · FoV {{ response.fov_deg }}°
+      · {{ response.min_alt_km | round(0) | int }}–{{ response.max_alt_km | round(0) | int }} km range
+    </div>
+  </div>
+
+  {% if response.sweet_spots %}
+  <div style="display:flex;flex-direction:column;gap:6px;">
+    {% for spot in response.sweet_spots %}
+    <div style="background:var(--bg-2);border:1px solid var(--line-strong);
+                border-left:2px solid var(--gold);border-radius:4px;
+                padding:10px 14px;">
+      <div style="display:flex;gap:20px;flex-wrap:wrap;">
+        <div>
+          <div style="font-family:var(--mono);font-size:9px;color:var(--text-3);
+                      text-transform:uppercase;letter-spacing:0.1em;">Altitude</div>
+          <div style="font-family:var(--mono);font-size:15px;color:var(--gold);">
+            {{ "{:,.0f}".format(spot.altitude_km) }} km
+          </div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:9px;color:var(--text-3);
+                      text-transform:uppercase;letter-spacing:0.1em;">Period</div>
+          <div style="font-family:var(--mono);font-size:15px;color:var(--text);">
+            {{ "%dh %02dm" % (spot.period_s // 3600, (spot.period_s % 3600) // 60) }}
+          </div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:9px;color:var(--text-3);
+                      text-transform:uppercase;letter-spacing:0.1em;">Swath</div>
+          <div style="font-family:var(--mono);font-size:15px;color:var(--text);">
+            {{ "{:.1f}".format(spot.swath_km) }} km
+          </div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:9px;color:var(--text-3);
+                      text-transform:uppercase;letter-spacing:0.1em;">Track shift</div>
+          <div style="font-family:var(--mono);font-size:15px;color:var(--text);">
+            {{ "{:.1f}".format(spot.shift_km) }} km
+          </div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:9px;color:var(--text-3);
+                      text-transform:uppercase;letter-spacing:0.1em;">Orbits/day</div>
+          <div style="font-family:var(--mono);font-size:15px;color:var(--text);">
+            {{ "{:.1f}".format(spot.orbits_per_day) }}
+          </div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:9px;color:var(--text-3);
+                      text-transform:uppercase;letter-spacing:0.1em;">Days to cover</div>
+          <div style="font-family:var(--mono);font-size:15px;color:var(--text);">
+            {{ "{:.1f}".format(spot.days_to_coverage) }}
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="ksp-empty">No sweet spots found in the specified altitude range.</div>
+  {% endif %}
+</div>

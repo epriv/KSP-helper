@@ -29,6 +29,10 @@ from ksp_planner.web.routes import comms as comms_routes  # noqa: E402
 
 app.include_router(comms_routes.router)
 
+from ksp_planner.web.routes import scanning as scanning_routes  # noqa: E402
+
+app.include_router(scanning_routes.router)
+
 
 @app.get("/health")
 def health() -> dict[str, str]:

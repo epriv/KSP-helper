@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% from "macros/forms.html" import body_select %}
+{% from "macros/panels.html" import error_flash %}
+
+{% block title %}Scanning Optimizer — KSP Planner{% endblock %}
+
+{% block content %}
+<div class="ksp-panel">
+  <div class="ksp-panel-header">
+    <div class="ksp-panel-eyebrow">Polar Scanner</div>
+    <h2 class="ksp-panel-title">Sweet-Spot Orbit Finder</h2>
+  </div>
+
+  {% if error %}{{ error_flash(error) }}{% endif %}
+
+  <form method="post" action="/scanning"
+        hx-post="/scanning" hx-target="#result" hx-swap="innerHTML" hx-push-url="true">
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+      <div class="ksp-stop">
+        <div class="ksp-stop-label">Target body</div>
+        {{ body_select("body", bodies, selected=(form.body if form else "kerbin")) }}
+      </div>
+      <div class="ksp-stop">
+        <div class="ksp-stop-label">Scanner FoV (°)</div>
+        <div class="ksp-margin">
+          <input class="ksp-input" type="number" name="fov_deg"
+                 min="0.01" max="90" step="0.1"
+                 value="{{ form.fov_deg if form else 5.0 }}" style="width:70px;">
+          <span class="ksp-suffix">°</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="ksp-controls">
+      <button class="btn-primary" type="submit">Find Sweet Spots →</button>
+    </div>
+  </form>
+
+  <div id="result">
+    {% if response %}
+      {% include "partials/scanning_result.html" %}
+    {% else %}
+      <div class="ksp-empty">Submit the form above to find polar scanning orbits.</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
