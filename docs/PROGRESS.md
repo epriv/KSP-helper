@@ -2,8 +2,8 @@
 
 > Resumable status snapshot. Paired with [01-phases.md](01-phases.md) (the plan) and [02-data-sources.md](02-data-sources.md) (the data provenance).
 
-**Last updated:** 2026-04-25
-**Tests:** 254 passing · **Lint:** clean · **Coverage:** 96% overall, 100% on `orbital.py` and `db.py`.
+**Last updated:** 2026-04-28
+**Tests:** 290 passing · **Lint:** clean · **Coverage:** 96% overall, 100% on `orbital.py` and `db.py`.
 
 ---
 
@@ -19,7 +19,7 @@
 | 5 | Hohmann / TWR / Tsiolkovsky | ✅ done | Kerbin→Duna matches canonical 1060 m/s ejection |
 | 6 | Mission plan persistence | ✅ done | All four calculators support `--save NAME`; `ksp plan {list,show,run,delete}` covers round-trip |
 | 7 | Δv planner (Dijkstra graph, margin, stops, round-trip) | ✅ done | Shipped 7a–7e; design locked in [features/dv-planner.md](features/dv-planner.md); sub-phase ladder below |
-| 8 | Web UI (FastAPI) | 🔄 in progress | Tier 1 done — `/dv` + `/comms` + offline fonts; Tier 2/3 deferred (see roadmap below) |
+| 8 | Web UI (FastAPI) | 🔄 in progress | Tier 1 done — `/dv` + `/comms` + `/scanning` + offline fonts; Tier 2/3 deferred (see roadmap below) |
 | 9 | Mod packs / KSP2 seeds | ⬜ not started | |
 
 ### Tiered roadmap
@@ -28,7 +28,7 @@
 
 | Tier | Status | Scope |
 |------|--------|-------|
-| **Tier 1 — Mission Ready** | ✅ done | Δv Trip Planner (`/dv`) + Comm Network (`/comms`) + offline fonts + shareable URLs |
+| **Tier 1 — Mission Ready** | ✅ done | Δv Trip Planner (`/dv`) + Comm Network (`/comms`) + Scanning Optimizer (`/scanning`) + offline fonts + shareable URLs |
 | **Tier 2 — VAB Workbench** | ⬜ deferred | Hohmann transfer + TWR + Δv Budget web pages (calculators already exist in CLI) |
 | **Tier 3 — Mission Archive** | ⬜ deferred | Web-based save/load/delete for all calculations (`/plans` page) |
 
@@ -203,6 +203,25 @@ Shipped with TDD throughout. 16 new tests; 235 → 251 total. Lint clean. Spec a
 - **`routes/comms.py`.** GET + POST `/comms` following the identical pattern as `/dv`: `_compute()` helper centralises DB resolution + calculator calls; POST branches on `HX-Request` / `Accept: application/json` headers; GET accepts full querystring for shareable URLs.
 - **Templates.** `pages/comms.html` — two-column layout (form + sidebar); `partials/comms_result.html` — coverage indicator (green/red dot + margin), orbit totals, link-budget rows, gold resonant-deployment box, CLI hint. Sidebar has antenna range table + DSN level table, both loaded from DB.
 - **Nav chip enabled.** `base.html` "Comm Net" chip changed from `<span class="is-disabled">` to `<a href="/comms">` with `is-active` when on that route.
+
+### Phase 8f completion log
+
+Shipped with TDD throughout. 36 new tests (21 pure math + 6 schema + 9 web); 254 → 290 total. Lint clean. Plan at [docs/superpowers/plans/2026-04-28-scanning-optimizer-8f.md](superpowers/plans/2026-04-28-scanning-optimizer-8f.md).
+
+- **Pure math.** `src/ksp_planner/scanning.py`: `swath_width_m`, `ground_track_shift_m`, `is_resonant`, `days_to_full_coverage`, `find_sweet_spots`. No DB imports. Resonance check filters orbits where `orbits_per_day ≈ p/q` (q ≤ 12, tolerance 0.5%). Float-accumulator bug fixed to integer-range loop.
+- **Schemas.** `ScanningRequest`, `ScanningResponse`, `SweetSpotOut` appended to `schemas.py`.
+- **Route.** `src/ksp_planner/web/routes/scanning.py`: `GET /scanning` (empty state + shareable URL), `POST /scanning` (HTMX partial, JSON API, full-page). Follows `comms.py` pattern. Registered in `app.py`.
+- **UI.** Two-column layout: form + result panel, FOV preset sidebar with "How it works" explanation. Sweet-spot cards show altitude, period, swath, inclination (90°), days to full coverage.
+- **Nav.** `/scanning` chip added to `base.html`.
+
+**Acceptance:**
+
+```
+POST /scanning body=kerbin fov_deg=5
+  → 3 sweet spots, ~1050–1280 km altitude, ~13–14 days to full coverage
+  → HTMX partial: scanning-results div, no <html> chrome
+  → JSON: body_slug="kerbin", fov_deg=5.0, sweet_spots list with altitude_km > 0
+```
 
 ### Phase 8 — current state
 

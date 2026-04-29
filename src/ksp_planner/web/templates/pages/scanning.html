@@ -5,44 +5,91 @@
 {% block title %}Scanning Optimizer — KSP Planner{% endblock %}
 
 {% block content %}
-<div class="ksp-panel">
-  <div class="ksp-panel-header">
-    <div class="ksp-panel-eyebrow">Polar Scanner</div>
-    <h2 class="ksp-panel-title">Sweet-Spot Orbit Finder</h2>
-  </div>
+<div style="display:grid;grid-template-columns:1fr 260px;gap:22px;align-items:start;">
 
-  {% if error %}{{ error_flash(error) }}{% endif %}
+  {# ── Optimizer panel ── #}
+  <div class="ksp-panel">
+    <div class="ksp-panel-header">
+      <div class="ksp-panel-eyebrow">Polar Scanning</div>
+      <h2 class="ksp-panel-title">Sweet Spot Finder</h2>
+    </div>
 
-  <form method="post" action="/scanning"
-        hx-post="/scanning" hx-target="#result" hx-swap="innerHTML" hx-push-url="true">
+    {% if error %}{{ error_flash(error) }}{% endif %}
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
-      <div class="ksp-stop">
-        <div class="ksp-stop-label">Target body</div>
-        {{ body_select("body", bodies, selected=(form.body if form else "kerbin")) }}
-      </div>
-      <div class="ksp-stop">
-        <div class="ksp-stop-label">Scanner FoV (°)</div>
-        <div class="ksp-margin">
-          <input class="ksp-input" type="number" name="fov_deg"
-                 min="0.01" max="90" step="0.1"
-                 value="{{ form.fov_deg if form else 5.0 }}" style="width:70px;">
-          <span class="ksp-suffix">°</span>
+    <form method="post" action="/scanning"
+          hx-post="/scanning" hx-target="#result" hx-swap="innerHTML" hx-push-url="true">
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div class="ksp-stop">
+          <div class="ksp-stop-label">Target body</div>
+          {{ body_select("body", bodies, selected=(form.body if form else "kerbin")) }}
+        </div>
+        <div class="ksp-stop">
+          <div class="ksp-stop-label">Sensor FOV preset</div>
+          <select class="ksp-select" name="fov_preset"
+                  onchange="document.querySelector('[name=fov_deg]').value=this.value||this.value">
+            <option value="">Custom</option>
+            {% for preset in fov_presets %}
+            <option value="{{ preset.fov_deg }}"
+              {% if form and form.fov_deg == preset.fov_deg %}selected{% endif %}>
+              {{ preset.name }} ({{ preset.fov_deg }}°)
+            </option>
+            {% endfor %}
+          </select>
         </div>
       </div>
-    </div>
 
-    <div class="ksp-controls">
-      <button class="btn-primary" type="submit">Find Sweet Spots →</button>
-    </div>
-  </form>
+      <div style="margin-bottom:10px;">
+        <div class="ksp-stop">
+          <div class="ksp-stop-label">FOV (degrees, full cone)</div>
+          <div class="ksp-margin">
+            <input class="ksp-input" type="number" name="fov_deg" min="0.1" max="90" step="0.1"
+                   value="{{ form.fov_deg if form else 5.0 }}" style="width:60px;">
+            <span class="ksp-suffix">°</span>
+          </div>
+        </div>
+      </div>
 
-  <div id="result">
-    {% if response %}
-      {% include "partials/scanning_result.html" %}
-    {% else %}
-      <div class="ksp-empty">Submit the form above to find polar scanning orbits.</div>
-    {% endif %}
+      <div class="ksp-controls">
+        <button class="btn-primary" type="submit">Find Sweet Spots →</button>
+      </div>
+    </form>
+
+    <div id="result">
+      {% if response %}
+        {% include "partials/scanning_result.html" %}
+      {% else %}
+        <div class="ksp-empty">Select a body and sensor FOV to find optimal scanning orbits.</div>
+      {% endif %}
+    </div>
   </div>
+
+  {# ── Sidebar: FOV reference ── #}
+  <div class="ksp-panel">
+    <div class="ksp-panel-header">
+      <div class="ksp-panel-eyebrow">Reference</div>
+      <h2 class="ksp-panel-title">ScanSat Presets</h2>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:2px;font-family:var(--mono);font-size:12px;">
+      {% for preset in fov_presets %}
+      <div style="display:flex;justify-content:space-between;padding:6px 10px;
+                  background:var(--bg-2);border-radius:3px;">
+        <span style="color:var(--text-2);">{{ preset.name }}</span>
+        <span style="color:var(--text);">{{ preset.fov_deg }}°</span>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div style="margin-top:14px;padding:10px 14px;background:var(--bg-2);
+                border:1px solid var(--line);border-radius:4px;
+                font-family:var(--mono);font-size:11px;color:var(--text-2);line-height:1.6;">
+      <div style="color:var(--text-3);text-transform:uppercase;font-size:9px;
+                  letter-spacing:0.12em;margin-bottom:6px;">How it works</div>
+      Finds polar orbits where the body doesn't rotate into a repeating ground-track
+      pattern (resonance). Non-resonant orbits fill coverage quasi-randomly and
+      complete in the fewest days.
+    </div>
+  </div>
+
 </div>
 {% endblock %}
