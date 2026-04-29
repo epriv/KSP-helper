@@ -27,7 +27,7 @@
         <div class="ksp-stop">
           <div class="ksp-stop-label">Sensor FOV preset</div>
           <select class="ksp-select" name="fov_preset"
-                  onchange="document.querySelector('[name=fov_deg]').value=this.value||this.value">
+                  onchange="document.querySelector('[name=fov_deg]').value=this.value">
             <option value="">Custom</option>
             {% for preset in fov_presets %}
             <option value="{{ preset.fov_deg }}"
